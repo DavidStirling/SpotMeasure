@@ -129,7 +129,7 @@ class AboutWindow:
         x = self.master.winfo_rootx()
         x += self.master.winfo_width()
         self.aboutwindow = tk.Frame(self.master)
-        self.logo = Image.open(resource_path("resources/logo.png"))
+        self.logo = Image.open(resource_path("resources/logo.gif"))
         self.logoimg = ImageTk.PhotoImage(self.logo)
         self.logoimage = tk.Label(self.aboutwindow, image=self.logoimg)
         self.logoimage.pack(pady=(15, 0))
@@ -249,23 +249,23 @@ class InputTab(tk.Frame):
         self.spotbox.grid(column=4, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
         self.scrollbar.config(command=self.scroll_listboxes)
         self.scrollbar.grid(column=5, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
-        self.regionbox.bind("<MouseWheel>", self.mousewheel_listboxes)
-        self.spotbox.bind("<MouseWheel>", self.mousewheel_listboxes)
+        # self.regionbox.bind("<MouseWheel>", self.mousewheel_listboxes)
+        # self.spotbox.bind("<MouseWheel>", self.mousewheel_listboxes)
         self.file_list_box.grid_rowconfigure(1, weight=1)
         self.file_list_box.grid_rowconfigure(10, weight=1)
 
         # Control Buttons
         self.move_item_up = ttk.Button(self.file_list_box, text="Up", command=lambda: self.move_list_item("up"))
-        self.upphoto = tk.PhotoImage(file="resources/Up.png")
+        self.upphoto = tk.PhotoImage(file="resources/Up.gif")
         self.move_item_up.config(image=self.upphoto)
         self.move_item_down = ttk.Button(self.file_list_box, text="Down", command=lambda: self.move_list_item("down"))
-        self.dnphoto = tk.PhotoImage(file="resources/Down.png")
+        self.dnphoto = tk.PhotoImage(file="resources/Down.gif")
         self.move_item_down.config(image=self.dnphoto)
         self.add_item = ttk.Button(self.file_list_box, text="Add", command=self.add_list_item)
-        self.addphoto = tk.PhotoImage(file="resources/Add.png")
+        self.addphoto = tk.PhotoImage(file="resources/Add.gif")
         self.add_item.config(image=self.addphoto)
         self.remove_item = ttk.Button(self.file_list_box, text="Remove", command=self.remove_list_item)
-        self.delphoto = tk.PhotoImage(file="resources/Remove.png")
+        self.delphoto = tk.PhotoImage(file="resources/Remove.gif")
         self.remove_item.config(image=self.delphoto)
         self.move_item_up.grid(column=3, row=2, padx=2, pady=5, sticky=tk.E + tk.W)
         self.move_item_down.grid(column=3, row=3, padx=2, pady=5, sticky=tk.E + tk.W)
@@ -462,7 +462,7 @@ class ImageViewer(tk.Frame):
         self.previewframe = ttk.Frame(self.ivframe, width=696, height=520)
         self.previewpane = tk.Label(self.previewframe)
         self.previewpane.pack()
-        self.previewpane.bind("<MouseWheel>", self.mouse_wheel)
+        # self.previewpane.bind("<MouseWheel>", self.mouse_wheel)
 
         # Frame of plane controls
         self.imgcontrols = ttk.LabelFrame(self.ivframe, text="File Controls:",
@@ -482,14 +482,14 @@ class ImageViewer(tk.Frame):
         self.changepreviewbutton.grid(column=4, row=2, padx=3, ipadx=10)
 
         self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous", state=tk.DISABLED)
-        self.prevphoto = tk.PhotoImage(file="resources/Left.png")
+        self.prevphoto = tk.PhotoImage(file="resources/Left.gif")
         self.prevplanebutton.config(image=self.prevphoto)
         self.prevplanebutton.grid(column=5, row=2, padx=1, pady=2)
         self.planenumber = ttk.Label(self.imgcontrols, text=(
                 "Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
         self.planenumber.grid(column=6, row=2)
         self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next", state=tk.DISABLED)
-        self.nextphoto = tk.PhotoImage(file="resources/Right.png")
+        self.nextphoto = tk.PhotoImage(file="resources/Right.gif")
         self.nextplanebutton.config(image=self.nextphoto)
         self.nextplanebutton.grid(column=7, row=2, padx=1, pady=2)
 
@@ -582,8 +582,8 @@ class ImageViewer(tk.Frame):
         self.overlaypreview = None
         self.runningstatus = False
 
-        for child in self.ivframe.children.values():
-            child.bind("<MouseWheel>", self.mouse_wheel)
+        # for child in self.ivframe.children.values():
+        #    child.bind("<MouseWheel>", self.mouse_wheel)
 
     def activate_tab(self, imagepool, imagenamepool):
         if self.firstview is False:
