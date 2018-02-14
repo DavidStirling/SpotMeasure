@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>."""
 
 import os
+import sys
 import threading
 import tkinter as tk
 import tkinter.filedialog as tkfiledialog
@@ -39,7 +40,7 @@ firstrun = True  # Do we need to write headers to the output file?
 def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
-    except Exception:
+    except AttributeError:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
@@ -966,12 +967,9 @@ class OutputTab(tk.Frame):
         work_thread.start()
 
     def abort_analysis(self):
-        try:
-            process_stopper.clear()
-            self.logevent("Aborted run")
-            self.update_progress('finished', 0)
-        except:
-            self.logevent("Unable to stop")
+        process_stopper.clear()
+        self.logevent("Aborted run")
+        self.update_progress('finished', 0)
 
     def start_analysis(self, stopper, regioninput, spotinput):
 
@@ -1038,7 +1036,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO  - Error handling
 # TODO  - Handle file format errors.
 # TODO  - Full 8bit support
-# TODO  - Further improve large object segmentation.
+# TODO  - Further improve large object segmentation

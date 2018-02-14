@@ -293,69 +293,54 @@ def headers():
     global savedir
     headings = ('File', 'Plane', 'Cell ID', 'Spot ID', 'Perimeter - Centroid', 'Perimeter - Spot', 'Spot - Centroid',
                 'Percent Migration')
-    with open(savedir, 'w', newline="\n", encoding="utf-8") as f:
-        headerwriter = csvwriter(f)
-        headerwriter.writerow(headings)
-    f.close()
-    # except AttributeError:
-    #    print("Directory appears to be invalid")
-    # except PermissionError:
-    #    print("Unable to write to save file. Please check write permissions.")
+    try:
+        with open(savedir, 'w', newline="\n", encoding="utf-8") as f:
+            headerwriter = csvwriter(f)
+            headerwriter.writerow(headings)
+        f.close()
+    except AttributeError:
+        print("Directory appears to be invalid")
+    except PermissionError:
+        print("Unable to write to save file. Please check write permissions.")
+    except OSError:
+        logevent("OSError, failed to write to save file.")
 
 
 # Write data to CSV file
 def datawriter(exportpath, exportdata):
     global currplane
     writeme = tuple([exportpath]) + tuple([currplane + 1]) + tuple([cellnum]) + tuple([indexnum + 1]) + exportdata
-    # try:
-    with open(savedir, 'a', newline="\n", encoding="utf-8") as f:
-        mainwriter = csvwriter(f)
-        mainwriter.writerow(writeme)
-    # except AttributeError:
-    #   print("Directory appears to be invalid")
-    # except PermissionError:
-    #    print("Unable to write to save file. Please check write permissions.")
-    # else:
-    #    print("Unknown exception")
-    f.close()
+    try:
+        with open(savedir, 'a', newline="\n", encoding="utf-8") as f:
+            mainwriter = csvwriter(f)
+            mainwriter.writerow(writeme)
+        f.close()
+    except AttributeError:
+        logevent("Directory appears to be invalid")
+    except PermissionError:
+        logevent("Unable to write to save file. Please check write permissions.")
+    except OSError:
+        logevent("OSError, failed to write to save file.")
 
 
 # File List Generator
 def genfilelist(tgtdirectory, subdirectories, regionkwd, spotkwd, mode):
-    if subdirectories is True:
-        regionfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                       files if f.endswith(".tif") and regionkwd in (f if mode == 0 else (
-                os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (os.path.join(root, f))))]
-        spotfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                     files if f.endswith(".tif") and spotkwd in (f if mode == 0 else (
-                os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (os.path.join(root, f))))]
-        regionshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for
-                            root, dirs, files in os.walk(tgtdirectory) for f in files if
-                            f.endswith(".tif") and regionkwd in (f if mode == 0 else (
-                                os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                                    os.path.join(root, f))))]
-        spotshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for root, dirs, files
-                          in os.walk(tgtdirectory) for f in files if f.endswith(".tif") and spotkwd in (
-                              f if mode == 0 else (
-                                  os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                                      os.path.join(root, f))))]
-    else:
-        regionfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                       files if f.endswith(".tif") and regionkwd in (f if mode == 0 else (
-                os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                    os.path.join(root, f)))) and root == tgtdirectory]
-        spotfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                     files if f.endswith(".tif") and spotkwd in (f if mode == 0 else (
-                os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                    os.path.join(root, f)))) and root == tgtdirectory]
-        regionshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for
-                            root, dirs, files in os.walk(tgtdirectory) for f in files if
-                            f.endswith(".tif") and regionkwd in (f if mode == 0 else (
-                                os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                                    os.path.join(root, f)))) and root == tgtdirectory]
-        spotshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for root, dirs, files
-                          in os.walk(tgtdirectory) for f in files if f.endswith(".tif") and spotkwd in (
-                              f if mode == 0 else (
-                                  os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                                      os.path.join(root, f)))) and root == tgtdirectory]
+    regionfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
+                   files if f.endswith(".tif") and regionkwd in
+                   (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
+                                         (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
+    spotfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
+                 files if f.endswith(".tif") and spotkwd in
+                 (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
+                                       (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
+    regionshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for
+                        root, dirs, files in os.walk(tgtdirectory) for f in files if
+                        f.endswith(".tif") and regionkwd in (f if mode == 0 else (
+                            os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
+                                os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
+    spotshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for root, dirs, files
+                      in os.walk(tgtdirectory) for f in files if f.endswith(".tif") and spotkwd in (
+                          f if mode == 0 else (
+                              os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
+                                  os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
     return regionfiles, spotfiles, regionshortnames, spotshortnames
