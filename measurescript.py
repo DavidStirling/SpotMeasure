@@ -160,7 +160,10 @@ def get_line_points(center, spot, inputimage):
     points = [center, spot]
     xcoords, ycoords = zip(*points)
     eqinput = np.vstack([xcoords, np.ones(len(xcoords))]).T
-    m, g = np.linalg.lstsq(eqinput, ycoords, rcond=None)[0]
+    if os.name == 'nt':
+        m, g = np.linalg.lstsq(eqinput, ycoords, rcond=None)[0]
+    else:
+        m, g = np.linalg.lstsq(eqinput, ycoords)[0]
     maxhor = inputimage.shape[1]
     maxver = inputimage.shape[0]
     ver2 = (maxhor - g) / m  # Maximum vertical

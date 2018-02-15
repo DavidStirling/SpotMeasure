@@ -318,7 +318,7 @@ class InputTab(tk.Frame):
                     del regionshortnames[selected]
                 regionfiles.insert(selected, newfile)
                 regionshortnames.insert(selected, (('..' + newfile[-maxlen:]) if len(newfile) > maxlen else newfile))
-            if target == "spots":
+            elif target == "spots":
                 if spotfiles[selected] == "<No File Found>":
                     del spotfiles[selected]
                     del spotshortnames[selected]
