@@ -36,6 +36,7 @@ spotshortnames = []
 firstrun = True  # Do we need to write headers to the output file?
 
 
+
 # Get path for unpacked Pyinstaller exe (MEIPASS), else default to current dir.
 def resource_path(relative_path):
     try:
@@ -50,33 +51,34 @@ class CoreWindow:
     # Core tabbed GUI
     def __init__(self, master):
         self.master = master
+        self.master.tk_setPalette(background='#E7E7E7', selectForeground='#ffffff', selectBackground='#0000ff')
         self.master.wm_title("MigraMeasure")
         self.master.iconbitmap(resource_path('resources/mmicon.ico'))
         self.master.resizable(width=False, height=True)
         self.height = self.master.winfo_screenheight()
-        self.width = 740
-        self.desiredheight = 825
+        self.width = 775
+        self.desiredheight = 880
         if self.height < self.desiredheight:
             self.master.geometry('%sx%s' % (self.width, self.height - 50))
         else:
             self.master.geometry('%sx%s' % (self.width, self.desiredheight))
 
         # Top Bar
-        self.header = tk.Frame()
+        self.header = tk.Frame(background='#E7E7E7')
         self.title = tk.Label(self.header, text="MigraMeasure", font=("Arial", 25), justify=tk.CENTER)
         self.title.grid(column=2, columnspan=1, row=1, sticky=tk.E + tk.W)
 
-        self.buttontype = ttk.Style()
-        self.buttontype.configure('MM.TButton', foreground='blue')
-        self.aboutbutton = ttk.Button(self.header, text="About", command=self.about_window, style='MM.TButton')
+        self.aboutbutton = ttk.Button(self.header, text="About", command=self.about_window)
         self.aboutbutton.grid(column=4, row=1, rowspan=1, sticky=tk.E + tk.W, padx=25)
         self.header.grid_columnconfigure(1, weight=1)
         self.header.grid_columnconfigure(5, weight=1)
         self.header.pack(fill=tk.BOTH)
 
+        # s = ttk.Style()
+        # s.configure('TNotebook.Tab', padding=(2, 2, 2, 2))
         # Tab Control
         self.tabControl = ttk.Notebook()
-        self.tabControl.pack(pady=(10, 0), padx=5, fill=tk.BOTH, expand=True)
+        self.tabControl.pack(pady=10, padx=5, fill=tk.BOTH, expand=True)
         self.tab1 = ttk.Frame(self.tabControl)  # Input page
         self.tab2 = ttk.Frame(self.tabControl)  # region segmentation page
         self.tab3 = ttk.Frame(self.tabControl)  # spot segmentation page
@@ -113,7 +115,6 @@ class CoreWindow:
         self.about_window = tk.Toplevel(self.master)
         self.app = AboutWindow(self.about_window)
         self.about_window.title("About")
-        self.about_window.wm_attributes('-toolwindow', 1)
         self.about_window.focus_set()
         self.about_window.grab_set()
         self.about_window.update_idletasks()
@@ -128,7 +129,7 @@ class AboutWindow:
         self.master = master
         x = self.master.winfo_rootx()
         x += self.master.winfo_width()
-        self.aboutwindow = tk.Frame(self.master)
+        self.aboutwindow = tk.Frame(self.master, background='#E7E7E7')
         self.logo = Image.open(resource_path("resources/logo.gif"))
         self.logoimg = ImageTk.PhotoImage(self.logo)
         self.logoimage = tk.Label(self.aboutwindow, image=self.logoimg)
@@ -243,9 +244,11 @@ class InputTab(tk.Frame):
         self.file_list_box = ttk.Frame(target, border=2, relief=tk.GROOVE)
         self.file_list_box.pack(expand=True, fill=tk.Y)
         self.scrollbar = ttk.Scrollbar(self.file_list_box, orient=tk.VERTICAL)
-        self.regionbox = tk.Listbox(self.file_list_box, width=52, yscrollcommand=self.scrollbar.set, activestyle="none")
+        self.regionbox = tk.Listbox(self.file_list_box, bg='#FAFAFA', width=35, yscrollcommand=self.scrollbar.set,
+                                    activestyle="none")
         self.regionbox.grid(column=1, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
-        self.spotbox = tk.Listbox(self.file_list_box, width=52, yscrollcommand=self.scrollbar.set, activestyle="none")
+        self.spotbox = tk.Listbox(self.file_list_box, bg='#FAFAFA', width=35, yscrollcommand=self.scrollbar.set,
+                                  activestyle="none")
         self.spotbox.grid(column=4, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
         self.scrollbar.config(command=self.scroll_listboxes)
         self.scrollbar.grid(column=5, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
@@ -481,14 +484,14 @@ class ImageViewer(tk.Frame):
         self.changepreviewbutton = ttk.Button(self.imgcontrols, text="Select File", )
         self.changepreviewbutton.grid(column=4, row=2, padx=3, ipadx=10)
 
-        self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous", state=tk.DISABLED)
+        self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous")
         self.prevphoto = tk.PhotoImage(file="resources/Left.gif")
         self.prevplanebutton.config(image=self.prevphoto)
         self.prevplanebutton.grid(column=5, row=2, padx=1, pady=2)
         self.planenumber = ttk.Label(self.imgcontrols, text=(
                 "Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
         self.planenumber.grid(column=6, row=2)
-        self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next", state=tk.DISABLED)
+        self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next")
         self.nextphoto = tk.PhotoImage(file="resources/Right.gif")
         self.nextplanebutton.config(image=self.nextphoto)
         self.nextplanebutton.grid(column=7, row=2, padx=1, pady=2)
@@ -496,8 +499,7 @@ class ImageViewer(tk.Frame):
         self.changepreviewbutton.config(command=lambda: self.update_file("new"))
         self.prevpreviewbutton.config(command=lambda: self.update_file("rev"))
         self.nextpreviewbutton.config(command=lambda: self.update_file("fwd"))
-        self.prevplanebutton.config(command=lambda: self.update_plane("rev"))
-        self.nextplanebutton.config(command=lambda: self.update_plane("fwd"))
+
 
         self.previewframe.pack(padx=5, fill=tk.Y)
 
@@ -604,8 +606,8 @@ class ImageViewer(tk.Frame):
             self.previewpane.config(image='', text="No Image")
             self.planenumber.config(text=("Plane " + str(00) + " of " + str(00)))
             self.previewtitle.config(text=self.previewfiletitle)
-            self.prevplanebutton.config(state=tk.DISABLED)
-            self.nextplanebutton.config(state=tk.DISABLED)
+            self.prevplanebutton.config(command=None)
+            self.nextplanebutton.config(command=None)
             return
         self.planeid = 1
         if self.previewfile != "<No File Found>":
@@ -648,7 +650,8 @@ class ImageViewer(tk.Frame):
             self.previewpane.config(image=self.preview)
 
     def update_plane(self, direction):
-        self.numplanes = self.image.n_frames
+        if self.image:
+            self.numplanes = self.image.n_frames
         if direction == "fwd":
             self.planeid += 1
             self.image.seek(self.planeid - 1)
@@ -660,18 +663,18 @@ class ImageViewer(tk.Frame):
             self.regen_preview()
         elif self.previewfile == "<No File Found>":
             self.planenumber.config(text="Plane 00 of 00")
-            self.prevplanebutton.config(state=tk.DISABLED)
-            self.nextplanebutton.config(state=tk.DISABLED)
+            self.prevplanebutton.config(command=None)
+            self.nextplanebutton.config(command=None)
             self.overlaymade = False
             self.progress_var.set(0)
             return
         self.planenumber.config(text=("Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
-        self.prevplanebutton.config(state=tk.DISABLED)
-        self.nextplanebutton.config(state=tk.DISABLED)
+        self.prevplanebutton.config(command=None)
+        self.nextplanebutton.config(command=None)
         if self.planeid > 1:
-            self.prevplanebutton.config(state=tk.NORMAL)
+            self.prevplanebutton.config(command=lambda: self.update_plane("rev"))
         if self.planeid < self.numplanes:
-            self.nextplanebutton.config(state=tk.NORMAL)
+            self.nextplanebutton.config(command=lambda: self.update_plane("fwd"))
         self.overlaymade = False
         if self.overlayon is True:
             self.initiate_overlay()
@@ -679,8 +682,8 @@ class ImageViewer(tk.Frame):
             self.progress_var.set(0)
 
     def update_file(self, changetype):
-        self.nextpreviewbutton.config(state=tk.DISABLED)
-        self.prevpreviewbutton.config(state=tk.DISABLED)
+        self.nextpreviewbutton.config(command=None)
+        self.prevpreviewbutton.config(command=None)
 
         if changetype == "fwd":
             self.fileid += 1
@@ -707,9 +710,9 @@ class ImageViewer(tk.Frame):
             self.regen_preview()
 
         if self.fileid > 0:
-            self.prevpreviewbutton.config(state=tk.NORMAL)
+            self.prevpreviewbutton.config(command=lambda: self.update_plane("rev"))
         if self.fileid + 1 < len(self.imagepool):
-            self.nextpreviewbutton.config(state=tk.NORMAL)
+            self.nextpreviewbutton.config(command=lambda: self.update_plane("fwd"))
 
         self.planeid = 1
         self.update_plane("none")
@@ -812,8 +815,8 @@ class OutputTab(tk.Frame):
         # Set Preview Save Folder
 
         self.previewsavedir = tk.StringVar()
-        self.previewsavedir.set("Select Preview Save Directory")
-        self.prevsaveselect = ttk.Button(self.outputcontrols, text="Select Preview Save Directory",
+        self.previewsavedir.set("Select Preview Directory")
+        self.prevsaveselect = ttk.Button(self.outputcontrols, text="Set Preview Directory",
                                          command=self.preview_directory_set)
         self.prevsaveselect.grid(column=11, row=2, rowspan=1, padx=5, sticky=tk.E + tk.W)
         self.prevdir = ttk.Entry(self.outputcontrols, textvariable=self.previewsavedir, takefocus=False)
@@ -862,8 +865,8 @@ class OutputTab(tk.Frame):
         self.controlframe.pack()
 
         self.logframe = ttk.Frame(target)
-        self.logscrollbar = ttk.Scrollbar(self.logframe)
-        self.logbox = tk.Listbox(self.logframe, yscrollcommand=self.logscrollbar.set, activestyle="none")
+        self.logscrollbar = ttk.Scrollbar(self.logframe, bg='systemTransparent')
+        self.logbox = tk.Listbox(self.logframe, bg='#FAFAFA', yscrollcommand=self.logscrollbar.set, activestyle="none")
         self.logbox.pack(expand=True, fill=tk.BOTH, side=tk.LEFT)
         self.logscrollbar.config(command=self.logbox.yview)
         self.logscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
