@@ -648,6 +648,8 @@ class ImageViewer(tk.Frame):
             self.previewpane.config(image=self.preview)
 
     def update_plane(self, direction):
+        if self.image:
+            self.numplanes = self.image.n_frames
         self.numplanes = self.image.n_frames
         if direction == "fwd":
             self.planeid += 1
