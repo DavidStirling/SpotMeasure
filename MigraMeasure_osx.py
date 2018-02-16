@@ -53,7 +53,7 @@ class CoreWindow:
         self.master = master
         self.master.tk_setPalette(background='#E7E7E7', selectForeground='#ffffff', selectBackground='#0000ff')
         self.master.wm_title("MigraMeasure")
-        self.master.iconbitmap(resource_path('resources/mmicon.ico'))
+        self.master.iconbitmap(resource_path('resources/osxicon.icns'))
         self.master.resizable(width=False, height=True)
         self.height = self.master.winfo_screenheight()
         self.width = 775
@@ -259,16 +259,16 @@ class InputTab(tk.Frame):
 
         # Control Buttons
         self.move_item_up = ttk.Button(self.file_list_box, text="Up", command=lambda: self.move_list_item("up"))
-        self.upphoto = tk.PhotoImage(file="resources/Up.gif")
+        self.upphoto = tk.PhotoImage(file=resource_path("resources/Up.gif"))
         self.move_item_up.config(image=self.upphoto)
         self.move_item_down = ttk.Button(self.file_list_box, text="Down", command=lambda: self.move_list_item("down"))
-        self.dnphoto = tk.PhotoImage(file="resources/Down.gif")
+        self.dnphoto = tk.PhotoImage(file=resource_path("resources/Down.gif"))
         self.move_item_down.config(image=self.dnphoto)
         self.add_item = ttk.Button(self.file_list_box, text="Add", command=self.add_list_item)
-        self.addphoto = tk.PhotoImage(file="resources/Add.gif")
+        self.addphoto = tk.PhotoImage(file=resource_path("resources/Add.gif"))
         self.add_item.config(image=self.addphoto)
         self.remove_item = ttk.Button(self.file_list_box, text="Remove", command=self.remove_list_item)
-        self.delphoto = tk.PhotoImage(file="resources/Remove.gif")
+        self.delphoto = tk.PhotoImage(file=resource_path("resources/Remove.gif"))
         self.remove_item.config(image=self.delphoto)
         self.move_item_up.grid(column=3, row=2, padx=2, pady=5, sticky=tk.E + tk.W)
         self.move_item_down.grid(column=3, row=3, padx=2, pady=5, sticky=tk.E + tk.W)
@@ -485,14 +485,14 @@ class ImageViewer(tk.Frame):
         self.changepreviewbutton.grid(column=4, row=2, padx=3, ipadx=10)
 
         self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous")
-        self.prevphoto = tk.PhotoImage(file="resources/Left.gif")
+        self.prevphoto = tk.PhotoImage(file=resource_path("resources/Left.gif"))
         self.prevplanebutton.config(image=self.prevphoto)
         self.prevplanebutton.grid(column=5, row=2, padx=1, pady=2)
         self.planenumber = ttk.Label(self.imgcontrols, text=(
                 "Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
         self.planenumber.grid(column=6, row=2)
         self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next")
-        self.nextphoto = tk.PhotoImage(file="resources/Right.gif")
+        self.nextphoto = tk.PhotoImage(file=resource_path("resources/Right.gif"))
         self.nextplanebutton.config(image=self.nextphoto)
         self.nextplanebutton.grid(column=7, row=2, padx=1, pady=2)
 
