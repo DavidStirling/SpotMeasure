@@ -32,15 +32,15 @@ def genpreview(tgt, name):
 
 
 # Generate mini preview files as RGB overlays
-def betterpreview(regioninput, spotinput, centcoord, perimcoord, spotcoord, name):
+def betterpreview(regioninput, spotinput, centcoord, perimcoord, spotcoord, name, multiplier):
     global previewdir
     p, q = line(perimcoord[0], perimcoord[1], centcoord[0], centcoord[1])
     green = np.zeros_like(regioninput)
     green[p, q] = 255
     rgb = np.zeros((regioninput.shape[0], regioninput.shape[1], 3), 'uint8')
-    rgb[..., 1] = spotinput / 256
+    rgb[..., 1] = spotinput / multiplier
     rgb[..., 0] = green
-    rgb[..., 2] = regioninput / 256
+    rgb[..., 2] = regioninput / multiplier
     rgb[centcoord[0], centcoord[1]] = 255
     rgb[perimcoord[0], perimcoord[1]] = 255
     rgb[spotcoord[0], spotcoord[1]] = 255
@@ -50,21 +50,16 @@ def betterpreview(regioninput, spotinput, centcoord, perimcoord, spotcoord, name
 
 
 def seg_preview(imagearray, automatic, threshold, smoothing, minsize, imgtype):
+    multiplier, absolute_min = bit_depth_update(imagearray)
     imagearray2 = imagearray.copy()
-    if imagearray.dtype == 'uint16':
-        if imgtype == "regions":
-            absolute_min = 4096
-        else:
-            absolute_min = 8192
-    elif imagearray.dtype == 'uint8':
-        absolute_min = 32
-    else:
-        absolute_min = 0
+    if imgtype == "spots":
+        absolute_min *= 2
     if imgtype == "regions" and automatic:
         threshold = threshold_li(imagearray2)  # li > otsu for finding threshold
+        # threshold = threshold_otsu(imagearray2)  # li > otsu for finding threshold
     elif imgtype == "spots" and automatic:
-        imgmax = maximum(imagearray2 // 256, disk(10))  # Enlarge spots to assist thresholding
-        threshold = (threshold_otsu(imgmax) * 256)  # Generate otsu threshold for peaks.
+        imgmax = maximum(imagearray2 // multiplier, disk(10))  # Enlarge spots to assist thresholding
+        threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
     if absolute_min > threshold:
         threshold = absolute_min  # Set a minimum threshold in case an image is blank.
     mask = imagearray2 < threshold
@@ -85,22 +80,16 @@ def seg_preview(imagearray, automatic, threshold, smoothing, minsize, imgtype):
 
 def getseg(imagearray, settings, imgtype):
     automatic, threshold, smoothing, minsize = settings
+    multiplier, absolute_min = bit_depth_update(imagearray)
+    if imgtype == "spot":
+        absolute_min *= 2
     imagearray2 = imagearray.copy()
     if automatic:
-        if imagearray.dtype == 'uint16':
-            if imgtype == "region":
-                absolute_min = 4096
-            else:
-                absolute_min = 8192
-        elif imagearray.dtype == 'uint8':
-            absolute_min = 32
-        else:
-            absolute_min = 0
         if imgtype == "region":
             threshold = threshold_li(imagearray2)  # li > otsu for finding threshold
         else:
-            imgmax = maximum(imagearray2 // 256, disk(10))  # Enlarge spots to assist thresholding
-            threshold = (threshold_otsu(imgmax) * 256)  # Generate otsu threshold for peaks.
+            imgmax = maximum(imagearray2 // multiplier, disk(10))  # Enlarge spots to assist thresholding
+            threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
         if absolute_min > threshold:
             threshold = absolute_min  # Set a minimum threshold in case an image is blank.
     mask = imagearray2 < threshold
@@ -220,7 +209,7 @@ def gennumbers(centpoint, perimpoint, tgtpoint):
     return totaldist, spottoperim, spottocenter, percentmigration
 
 
-def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper):
+def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier):
     regionseg, regionproperties, regioncentroids, regionlabels = getseg(im, region_settings, 'region')
     spotseg, spotcentroids, spotcentroids, spotlabels = getseg(im2, spot_settings, 'spot')
     global indexnum
@@ -245,7 +234,7 @@ def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cel
                     spots += 1
                     indexnum += 1
                     if wantpreview is True:
-                        betterpreview(braw, rraw, regioncent, perimpoint, spot, indexnum)
+                        betterpreview(braw, rraw, regioncent, perimpoint, spot, indexnum, multiplier)
     logevent("Analysed " + str(spots) + " spots in " + str(len(regionlabels)) + " cells.")
     return
 
@@ -268,9 +257,10 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, wantpreview,
                 img2.seek(i)
                 im = np.array(img)
                 im2 = np.array(img2)
+                multiplier, absolute_min = bit_depth_update(im)
                 global currplane
                 currplane = i
-                cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper)
+                cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier)
 
 
 def cyclefiles(regioninput, spotinput, region_settings, spot_settings, wantpreview, logfile, prevdir, one_per_cell,
@@ -329,20 +319,20 @@ def datawriter(exportpath, exportdata):
 # File List Generator
 def genfilelist(tgtdirectory, subdirectories, regionkwd, spotkwd, mode):
     regionfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                   files if f.endswith(".tif") and regionkwd in
+                   files if f.lower().endswith(".tif") and regionkwd in
                    (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
                                          (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
     spotfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                 files if f.endswith(".tif") and spotkwd in
+                 files if f.lower().endswith(".tif") and spotkwd in
                  (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
                                        (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
     regionshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for
                         root, dirs, files in os.walk(tgtdirectory) for f in files if
-                        f.endswith(".tif") and regionkwd in (f if mode == 0 else (
+                        f.lower().endswith(".tif") and regionkwd in (f if mode == 0 else (
                             os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
                                 os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
     spotshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for root, dirs, files
-                      in os.walk(tgtdirectory) for f in files if f.endswith(".tif") and spotkwd in (
+                      in os.walk(tgtdirectory) for f in files if f.lower().endswith(".tif") and spotkwd in (
                           f if mode == 0 else (
                               os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
                                   os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]

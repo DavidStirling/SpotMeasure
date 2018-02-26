@@ -28,13 +28,17 @@ from PIL import ImageTk
 import measurescript as ms
 
 # Global Variables
-version = "0.4 Beta"
+version = "0.5 Beta"
 regionfiles = []
 spotfiles = []
 regionshortnames = []
 spotshortnames = []
 firstrun = True  # Do we need to write headers to the output file?
-
+depthmap = {0: ("8-bit", 1, 256, 16), 1: ("10-bit", 4, 1024, 64), 2: ("12-bit", 16, 4096, 256),
+            3: ("16-bit", 256, 65536, 4096)}  # (ID, multiplier, maxrange, absmin)
+currentdepthname, scalemultiplier, maxrange, absmin = depthmap[0]
+manualbitdepth = False
+currentdepth = 0
 
 # Get path for unpacked Pyinstaller exe (MEIPASS), else default to current dir.
 def resource_path(relative_path):
@@ -45,10 +49,41 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
+def bit_depth_update(array):
+    global depthmap, currentdepth, scalemultiplier, maxrange, absmin, depthname, manualbitdepth
+    maxvalue = array.max()
+    if manualbitdepth:
+        return scalemultiplier, absmin
+    if maxvalue < 256:
+        depth = 0
+    elif 256 <= maxvalue < 1024:
+        depth = 1
+    elif 1024 <= maxvalue < 4096:
+        depth = 2
+    else:
+        depth = 3
+    if currentdepth < depth:
+        name, scalemultiplier, maxrange, absmin = depthmap[depth]
+        currentdepth = depth
+        app.logconfig.logevent("Detected bit depth: " + name)
+        app.regionconfig.threshold.config(to=maxrange)
+        app.spotconfig.threshold.config(to=maxrange)
+        app.regionconfig.default_thresh = absmin
+        app.spotconfig.default_thresh = absmin * 2
+        app.regionconfig.thresh.set(absmin)
+        app.spotconfig.thresh.set(absmin * 2)
+        depthname.set(name)
+    return scalemultiplier, absmin
+
+
+
 # Core UI
 class CoreWindow:
     # Core tabbed GUI
     def __init__(self, master):
+        global currentdepthname, depthname
+        depthname = tk.StringVar()
+        depthname.set(currentdepthname)
         self.master = master
         self.master.wm_title("MigraMeasure")
         self.master.iconbitmap(resource_path('resources/mmicon.ico'))
@@ -167,9 +202,17 @@ class InputTab(tk.Frame):
         self.currdir.bind("<Button-1>", self.select_directory)
         self.subdiron = tk.BooleanVar()
         self.subdiron.set(True)
+        self.bitlabel = ttk.Label(self.inputframe, text="Bit Depth:")
+        self.bitlabel.grid(column=1, row=2)
+        self.bitcheck = ttk.Combobox(self.inputframe, state="readonly")
+        self.bitcheck['values'] = ('Auto Detect', '8-bit', '10-bit', '12-bit', '16-bit')
+        self.bitcheck.current(0)
+        self.bitcheck.grid(column=2, row=2)
         self.subdircheck = ttk.Checkbutton(self.inputframe, text="Include Subdirectories", variable=self.subdiron,
                                            onvalue=True, offvalue=False)
         self.subdircheck.grid(column=7, row=2, columnspan=4, sticky=tk.E)
+        self.inputframe.grid_columnconfigure(3, weight=1)
+        self.bitcheck.bind("<<ComboboxSelected>>", self.depthboxcallback)
 
         # Region Colour Select Box
         self.region_keyword = tk.StringVar()
@@ -271,6 +314,28 @@ class InputTab(tk.Frame):
         self.move_item_down.grid(column=3, row=3, padx=2, pady=5, sticky=tk.E + tk.W)
         self.add_item.grid(column=3, row=4, padx=2, pady=5, sticky=tk.E + tk.W)
         self.remove_item.grid(column=3, row=5, padx=2, pady=5, sticky=tk.E + tk.W)
+
+    def depthboxcallback(*args):
+        global depthmap, currentdepth, scalemultiplier, maxrange, absmin, depthname, manualbitdepth
+        id = app.input.bitcheck.current()
+        id -= 1  # Subtract to match auto selection
+        if id < 0:
+            id = 0
+            manualbitdepth = False
+        else:
+            manualbitdepth = True
+        name, scalemultiplier, maxrange, absmin = depthmap[id]
+        currentdepth = id
+        app.logconfig.logevent("Detected bit depth: " + name)
+        app.regionconfig.threshold.config(to=maxrange)
+        app.spotconfig.threshold.config(to=maxrange)
+        app.regionconfig.default_thresh = absmin
+        app.spotconfig.default_thresh = absmin * 2
+        app.regionconfig.thresh.set(absmin)
+        app.spotconfig.thresh.set(absmin * 2)
+        depthname.set(name)
+        app.regionconfig.firstview = True
+        app.spotconfig.firstview = True
 
     def get_selected(self):
         if self.regionbox.curselection():
@@ -430,14 +495,14 @@ class ImageViewer(tk.Frame):
             self.imagenamepool = regionshortnames
             self.default_smoothing = 10
             self.default_minsize = 1000
-            self.default_thresh = 4096
+            self.default_thresh = 16
         elif self.type == "spots":
             global spotfiles, spotshortnames
             self.imagepool = spotfiles
             self.imagenamepool = spotshortnames
             self.default_smoothing = 1
             self.default_minsize = 10
-            self.default_thresh = 8192
+            self.default_thresh = 32
         self.ivcanvas = tk.Canvas(target, highlightthickness=0)
         self.ivframe = ttk.Frame(self.ivcanvas)
         self.ivscrollbar = ttk.Scrollbar(target, command=self.ivcanvas.yview)
@@ -499,6 +564,10 @@ class ImageViewer(tk.Frame):
         self.prevplanebutton.config(command=lambda: self.update_plane("rev"))
         self.nextplanebutton.config(command=lambda: self.update_plane("fwd"))
 
+        global depthname
+        self.bitdepthdisplay = ttk.Label(self.imgcontrols, textvariable=depthname)
+        self.bitdepthdisplay.grid(column=8, row=2, padx=1, pady=2)
+
         self.previewframe.pack(padx=5, fill=tk.Y)
 
         # Image Segmentation Controls
@@ -544,8 +613,8 @@ class ImageViewer(tk.Frame):
         self.thresh.set(50)
         self.thresholdlabel = ttk.LabelFrame(self.sliderframe, text="Threshold:")
         self.thresholdlabel.grid(column=1, row=4, padx=5)
-        self.threshold_max = 65000
-        self.threshold = ttk.Scale(self.thresholdlabel, from_=0, to=self.threshold_max, length=200,
+        self.threshold_max = 256
+        self.threshold = ttk.Scale(self.thresholdlabel, from_=0, to=256, length=200,
                                    variable=self.thresh, command=lambda s: self.thresh.set('%0.0f' % float(s)))
         self.threshold.grid(column=1, columnspan=1, row=1, padx=5)
         self.setthr = ttk.Entry(self.thresholdlabel, textvariable=self.thresh, justify=tk.CENTER, )
@@ -627,11 +696,8 @@ class ImageViewer(tk.Frame):
             self.overlayon = False
             self.toggleoverlay.state(['!pressed'])
         else:
-            if self.image.mode == 'I;8' or self.image.mode == 'L':
-                self.threshold_max = 256
-            elif self.image.mode == 'I;16':
-                self.threshold_max = 65000
-            else:
+            validmodes = ['I;8', 'L', 'I;16']
+            if self.image.mode not in validmodes:
                 self.previewpane.config(image='', text="Invalid Image File Format")
                 self.planenumber.config(text=("Plane " + str(00) + " of " + str(00)))
                 self.previewframe.config(height=520)
@@ -639,9 +705,9 @@ class ImageViewer(tk.Frame):
                 self.overlayon = False
                 self.toggleoverlay.state(['!pressed'])
                 return
-            self.threshold.config(from_=0, to=self.threshold_max)
             self.im = np.array(self.image)
-            self.im2 = (self.im / 256).astype('uint8')
+            multiplier, absmin = bit_depth_update(self.im)
+            self.im2 = (self.im / multiplier).astype('uint8')
             self.im2 = self.im2[::2, ::2]
             self.temppreview = Image.fromarray(self.im2)
             self.preview = ImageTk.PhotoImage(self.temppreview)
@@ -650,7 +716,8 @@ class ImageViewer(tk.Frame):
     def update_plane(self, direction):
         if self.image:
             self.numplanes = self.image.n_frames
-        self.numplanes = self.image.n_frames
+        else:
+            self.numplanes = 0
         if direction == "fwd":
             self.planeid += 1
             self.image.seek(self.planeid - 1)
@@ -1024,6 +1091,7 @@ def main():
     app = CoreWindow(root)
     ms.logevent = app.logconfig.logevent
     ms.update_progress = app.logconfig.update_progress
+    ms.bit_depth_update = bit_depth_update
     root.mainloop()
 
 
@@ -1031,5 +1099,9 @@ if __name__ == "__main__":
     main()
 
 # TODO  - Handle file format errors.
-# TODO  - Full 8bit support
 # TODO  - Further improve large object segmentation
+# TODO  - Stop delay
+# TODO  - Li vs Otsu threshold switch
+# TODO  - Fix down arrow on mac version.
+# TODO  - Specify plane number.
+# TODO  - Support LEICA tifs.
