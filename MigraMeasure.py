@@ -40,6 +40,7 @@ currentdepthname, scalemultiplier, maxrange, absmin = depthmap[0]
 manualbitdepth = False
 currentdepth = 0
 
+
 # Get path for unpacked Pyinstaller exe (MEIPASS), else default to current dir.
 def resource_path(relative_path):
     try:
@@ -74,7 +75,6 @@ def bit_depth_update(array):
         app.spotconfig.thresh.set(absmin * 2)
         depthname.set(name)
     return scalemultiplier, absmin
-
 
 
 # Core UI
@@ -317,15 +317,15 @@ class InputTab(tk.Frame):
 
     def depthboxcallback(*args):
         global depthmap, currentdepth, scalemultiplier, maxrange, absmin, depthname, manualbitdepth
-        id = app.input.bitcheck.current()
-        id -= 1  # Subtract to match auto selection
-        if id < 0:
-            id = 0
+        depthid = app.input.bitcheck.current()
+        depthid -= 1  # Subtract to match auto selection
+        if depthid < 0:
+            depthid = 0
             manualbitdepth = False
         else:
             manualbitdepth = True
-        name, scalemultiplier, maxrange, absmin = depthmap[id]
-        currentdepth = id
+        name, scalemultiplier, maxrange, absmin = depthmap[depthid]
+        currentdepth = depthid
         app.logconfig.logevent("Detected bit depth: " + name)
         app.regionconfig.threshold.config(to=maxrange)
         app.spotconfig.threshold.config(to=maxrange)
@@ -489,10 +489,13 @@ class ImageViewer(tk.Frame):
         self.firstview = True
         self.type = viewertype
         self.fileid = 0
+        self.segtype = tk.StringVar()
+
         if self.type == "regions":
             global regionfiles, regionshortnames
             self.imagepool = regionfiles
             self.imagenamepool = regionshortnames
+            self.segtype.set("High")
             self.default_smoothing = 10
             self.default_minsize = 1000
             self.default_thresh = 16
@@ -500,6 +503,7 @@ class ImageViewer(tk.Frame):
             global spotfiles, spotshortnames
             self.imagepool = spotfiles
             self.imagenamepool = spotshortnames
+            self.segtype.set("Low")
             self.default_smoothing = 1
             self.default_minsize = 10
             self.default_thresh = 32
@@ -539,24 +543,24 @@ class ImageViewer(tk.Frame):
         self.previewtitle.grid(row=1, column=2, columnspan=6, padx=20)
 
         self.prevpreviewbutton = ttk.Button(self.imgcontrols, text="Previous File")
-        self.prevpreviewbutton.grid(column=2, row=2, padx=(3, 0), pady=5, ipadx=10)
+        self.prevpreviewbutton.grid(column=3, row=2, padx=(3, 0), pady=5, ipadx=10, ipady=2)
         self.prevpreviewbutton.config(state=tk.DISABLED)
         self.nextpreviewbutton = ttk.Button(self.imgcontrols, text="Next File")
-        self.nextpreviewbutton.grid(column=3, row=2, padx=(0, 3), pady=5, ipadx=10)
+        self.nextpreviewbutton.grid(column=4, row=2, padx=(0, 3), pady=5, ipadx=10, ipady=2)
         self.changepreviewbutton = ttk.Button(self.imgcontrols, text="Select File", )
-        self.changepreviewbutton.grid(column=4, row=2, padx=3, ipadx=10)
+        self.changepreviewbutton.grid(column=5, row=2, padx=3, ipadx=10, ipady=2)
 
         self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous", state=tk.DISABLED)
         self.prevphoto = tk.PhotoImage(file=resource_path("resources/Left.png"))
         self.prevplanebutton.config(image=self.prevphoto)
-        self.prevplanebutton.grid(column=5, row=2, padx=1, pady=2)
+        self.prevplanebutton.grid(column=6, row=2, padx=1, pady=2)
         self.planenumber = ttk.Label(self.imgcontrols, text=(
                 "Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
-        self.planenumber.grid(column=6, row=2)
+        self.planenumber.grid(column=7, row=2)
         self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next", state=tk.DISABLED)
         self.nextphoto = tk.PhotoImage(file=resource_path("resources/Right.png"))
         self.nextplanebutton.config(image=self.nextphoto)
-        self.nextplanebutton.grid(column=7, row=2, padx=1, pady=2)
+        self.nextplanebutton.grid(column=8, row=2, padx=1, pady=2)
 
         self.changepreviewbutton.config(command=lambda: self.update_file("new"))
         self.prevpreviewbutton.config(command=lambda: self.update_file("rev"))
@@ -565,8 +569,10 @@ class ImageViewer(tk.Frame):
         self.nextplanebutton.config(command=lambda: self.update_plane("fwd"))
 
         global depthname
-        self.bitdepthdisplay = ttk.Label(self.imgcontrols, textvariable=depthname)
-        self.bitdepthdisplay.grid(column=8, row=2, padx=1, pady=2)
+        self.bitdepthlabel = ttk.LabelFrame(self.imgcontrols, text="Display Mode", relief='flat')
+        self.bitdepthdisplay = ttk.Label(self.bitdepthlabel, textvariable=depthname)
+        self.bitdepthlabel.grid(column=2, row=2, padx=1, pady=2)
+        self.bitdepthdisplay.pack()
 
         self.previewframe.pack(padx=5, fill=tk.Y)
 
@@ -576,22 +582,25 @@ class ImageViewer(tk.Frame):
         self.segcontrols.pack()
         self.segcontrols.grid_columnconfigure(10, weight=1)
         self.segcontrols.grid_columnconfigure(1, weight=1)
-        self.seglabel = ttk.Label(self.segcontrols, text="Segmentation Mode:")
-        self.seglabel.grid(column=2, row=1, columnspan=2)
-        self.segtype = tk.BooleanVar()
+        self.seglabel = ttk.Label(self.segcontrols, text="Thresholding Mode:")
+        self.seglabel.grid(column=2, row=1, columnspan=3)
 
-        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Automatic", variable=self.segtype, value=True,
-                                       command=lambda: self.threshold_mode(True))
+        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Strict)", variable=self.segtype, value="High",
+                                       command=lambda: self.threshold_mode("High"))
         self.autoseg.grid(column=2, row=2)
-        self.manualseg = ttk.Radiobutton(self.segcontrols, text="Manual", variable=self.segtype, value=False,
-                                         command=lambda: self.threshold_mode(False))
-        self.manualseg.grid(column=3, row=2)
+        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Noisy)", variable=self.segtype, value="Low",
+                                       command=lambda: self.threshold_mode("Low"))
+        self.autoseg.grid(column=3, row=2)
+        self.manualseg = ttk.Radiobutton(self.segcontrols, text="Manual", variable=self.segtype, value="Manual",
+                                         command=lambda: self.threshold_mode("Manual"))
+        self.manualseg.grid(column=4, row=2)
+
 
         # Regen Preview and Overlay Buttons
         self.regenprev = ttk.Button(self.segcontrols, text="Refresh Preview")
-        self.regenprev.grid(column=4, row=1, padx=5, rowspan=2, sticky=tk.NSEW)
+        self.regenprev.grid(column=5, row=1, padx=5, rowspan=2, sticky=tk.NSEW)
         self.toggleoverlay = ttk.Button(self.segcontrols, text="Show/Hide Overlay")
-        self.toggleoverlay.grid(column=5, row=1, padx=5, rowspan=2, sticky=tk.NSEW)
+        self.toggleoverlay.grid(column=6, row=1, padx=5, rowspan=2, sticky=tk.NSEW)
         # self.overlaysave = ttk.Button(self.segcontrols, text="Save Preview")
         # self.overlaysave.grid(column=6, row=1, rowspan=2, padx=5, sticky=tk.NSEW)
 
@@ -706,7 +715,7 @@ class ImageViewer(tk.Frame):
                 self.toggleoverlay.state(['!pressed'])
                 return
             self.im = np.array(self.image)
-            multiplier, absmin = bit_depth_update(self.im)
+            multiplier, absolute_min = bit_depth_update(self.im)
             self.im2 = (self.im / multiplier).astype('uint8')
             self.im2 = self.im2[::2, ::2]
             self.temppreview = Image.fromarray(self.im2)
@@ -845,19 +854,15 @@ class ImageViewer(tk.Frame):
         self.ivcanvas.yview_scroll(-event.delta, "units")
 
     def threshold_mode(self, autostatus):
-        if autostatus is True:
+        if self.segtype.get() == "Manual":
+            stateset = '!disabled'
+        else:
             stateset = 'disabled'
-            self.segtype.set(True)
             self.smooth.set(self.default_smoothing)
             self.minsize.set(self.default_minsize)
             self.thresh.set(self.default_thresh)
-        else:
-            stateset = '!disabled'
-            self.segtype.set(False)
-        for widget in self.sliderframe.winfo_children():
-            for subwidget in widget.winfo_children():
-                subwidget.state([stateset])
-            widget.state([stateset])
+        self.threshold.state([stateset])
+        self.setthr.state([stateset])
 
 
 class OutputTab(tk.Frame):
@@ -897,8 +902,23 @@ class OutputTab(tk.Frame):
         self.one_per_cell.set(False)
         self.singlespotcheck = ttk.Checkbutton(self.outputcontrols, text="Restrict analysis to cells with 1 spot",
                                                variable=self.one_per_cell, onvalue=True, offvalue=False)
-        self.singlespotcheck.grid(column=1, row=3, columnspan=4, sticky=tk.E)
+        self.singlespotcheck.grid(column=1, row=3, columnspan=4, sticky=tk.W)
 
+        self.one_plane = tk.BooleanVar()
+        self.one_plane.set(False)
+        self.singleplanecheck = ttk.Checkbutton(self.outputcontrols, text="Only analyse plane:",
+                                                variable=self.one_plane, onvalue=True, offvalue=False)
+        self.singleplanecheck.grid(column=1, row=4, columnspan=1, sticky=tk.W)
+
+        self.desiredplane = tk.IntVar()
+        self.desiredplane.set(1)
+        self.vcmd = (self.register(self.validate), '%d', '%i', '%P', '%s', '%S', '%v', '%V', '%W')
+        self.singleplaneentry = ttk.Entry(self.outputcontrols, validate='key', validatecommand=self.vcmd, width=3)
+        self.singleplaneentry.grid(column=2, row=4, columnspan=1, sticky=tk.W)
+        self.singleplanecheck.config(command=self.toggle_single_plane)
+        self.singleplaneentry.state(['disabled'])
+
+        self.outputcontrols.grid_columnconfigure(3, weight=1)
         self.startbutton = ttk.Button(target, text="Run!", command=self.sanity_check)
         self.startbutton.pack(expand=False, pady=10)
 
@@ -946,6 +966,31 @@ class OutputTab(tk.Frame):
         self.filelimit = 0
         self.planelimit = 0
         self.celllimit = 0
+
+    def validate(self, action, index, value_if_allowed, prior_value, input, validation_type, trigger_type, widget_name):
+        if input in '0123456789':
+            if value_if_allowed == "":
+                return True
+            if len(value_if_allowed) > 3 or int(value_if_allowed) < 1:
+                return False
+            try:
+                int(value_if_allowed)
+                self.desiredplane.set(int(value_if_allowed))
+                self.singleplaneentry.icursor(tk.END)
+                return True
+            except ValueError:
+                return False
+        else:
+            return False
+
+    def toggle_single_plane(self):
+        if self.one_plane.get():
+            self.singleplaneentry.state(['!disabled'])
+            self.desiredplane.set(1)
+            self.singleplaneentry.config(textvariable=self.desiredplane)
+        else:
+            self.singleplaneentry.state(['disabled'])
+        return
 
     # Pushes message to log box.
     def logevent(self, text):
@@ -997,6 +1042,9 @@ class OutputTab(tk.Frame):
             if os.path.isdir(self.previewsavedir.get()) is False:
                 self.logevent("Unable to run: No preview directory set")
                 return
+        if self.one_per_cell.get() and self.singleplaneentry.get() == "":
+            self.logevent("Unable to run: Single plane mode active but no plane specified.")
+            return
         finalregionfiles = [file for index, file in enumerate(regionfiles) if
                             regionfiles[index] != "<No File Found>" and spotfiles[index] != "<No File Found>"]
         finalspotfiles = [file for index, file in enumerate(spotfiles) if
@@ -1018,7 +1066,6 @@ class OutputTab(tk.Frame):
             widget.state(['disabled'])
         self.currlog.unbind("<Button 1>")
         self.prevdir.unbind("<Button 1>")
-
         global process_stopper
         process_stopper = threading.Event()
         process_stopper.set()
@@ -1034,12 +1081,13 @@ class OutputTab(tk.Frame):
 
     def start_analysis(self, stopper, regioninput, spotinput):
 
-        previews = self.prevsavon.get()
+        output_params = (self.prevsavon.get(), self.one_plane.get(), (self.desiredplane.get() - 1))
         region_settings = (app.regionconfig.segtype.get(), app.regionconfig.thresh.get(), app.regionconfig.smooth.get(),
                            app.regionconfig.minsize.get())
         spot_settings = (app.spotconfig.segtype.get(), app.spotconfig.thresh.get(), app.spotconfig.smooth.get(),
                          app.spotconfig.minsize.get())
-        ms.cyclefiles(regioninput, spotinput, region_settings, spot_settings, previews, self.logtext.get(),
+
+        ms.cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, self.logtext.get(),
                       self.previewsavedir.get(), self.one_per_cell.get(), stopper)
 
     def update_progress(self, updatetype, limit):
@@ -1087,7 +1135,6 @@ class OutputTab(tk.Frame):
 def main():
     global app
     root = tk.Tk()
-
     app = CoreWindow(root)
     ms.logevent = app.logconfig.logevent
     ms.update_progress = app.logconfig.update_progress
@@ -1101,7 +1148,4 @@ if __name__ == "__main__":
 # TODO  - Handle file format errors.
 # TODO  - Further improve large object segmentation
 # TODO  - Stop delay
-# TODO  - Li vs Otsu threshold switch
 # TODO  - Fix down arrow on mac version.
-# TODO  - Specify plane number.
-# TODO  - Support LEICA tifs.

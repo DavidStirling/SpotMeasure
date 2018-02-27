@@ -52,16 +52,21 @@ def betterpreview(regioninput, spotinput, centcoord, perimcoord, spotcoord, name
 def seg_preview(imagearray, automatic, threshold, smoothing, minsize, imgtype):
     multiplier, absolute_min = bit_depth_update(imagearray)
     imagearray2 = imagearray.copy()
-    if imgtype == "spots":
-        absolute_min *= 2
-    if imgtype == "regions" and automatic:
-        threshold = threshold_li(imagearray2)  # li > otsu for finding threshold
-        # threshold = threshold_otsu(imagearray2)  # li > otsu for finding threshold
-    elif imgtype == "spots" and automatic:
-        imgmax = maximum(imagearray2 // multiplier, disk(10))  # Enlarge spots to assist thresholding
-        threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
-    if absolute_min > threshold:
-        threshold = absolute_min  # Set a minimum threshold in case an image is blank.
+    if automatic != "Manual":
+        if imgtype == "spots":
+            absolute_min *= 2
+            imgmax = maximum(imagearray2 // multiplier, disk(10))
+            if automatic == "Low":
+                threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
+            elif automatic == "High":
+                threshold = (threshold_li(imgmax) * multiplier)
+        if imgtype == "regions":
+            if automatic == "High":
+                threshold = threshold_li(imagearray2)  # li > otsu for finding threshold when background is low
+            elif automatic == "Low":
+                threshold = threshold_otsu(imagearray2)
+        if absolute_min > threshold:
+            threshold = absolute_min  # Set a minimum threshold in case an image is blank.
     mask = imagearray2 < threshold
     imagearray2[mask] = 0  # Remove background
     binary = imagearray2 > 0
@@ -81,15 +86,22 @@ def seg_preview(imagearray, automatic, threshold, smoothing, minsize, imgtype):
 def getseg(imagearray, settings, imgtype):
     automatic, threshold, smoothing, minsize = settings
     multiplier, absolute_min = bit_depth_update(imagearray)
-    if imgtype == "spot":
-        absolute_min *= 2
     imagearray2 = imagearray.copy()
-    if automatic:
+    if automatic != "Manual":
+        if imgtype == "spot":
+            absolute_min *= 2
+            imgmax = maximum(imagearray2 // multiplier, disk(10))
+            if automatic == "Low":
+                threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
+            elif automatic == "High":
+                threshold = (threshold_li(imgmax) * multiplier)
         if imgtype == "region":
-            threshold = threshold_li(imagearray2)  # li > otsu for finding threshold
-        else:
-            imgmax = maximum(imagearray2 // multiplier, disk(10))  # Enlarge spots to assist thresholding
-            threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
+            if automatic == "High":
+                threshold = threshold_li(imagearray2)  # li > otsu for finding threshold when background is low
+            elif automatic == "Low":
+                threshold = threshold_otsu(imagearray2)
+        if absolute_min > threshold:
+            threshold = absolute_min  # Set a minimum threshold in case an image is blank.
         if absolute_min > threshold:
             threshold = absolute_min  # Set a minimum threshold in case an image is blank.
     mask = imagearray2 < threshold
@@ -239,7 +251,9 @@ def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cel
     return
 
 
-def cycleplanes(regionimg, spotimg, region_settings, spot_settings, wantpreview, one_per_cell, stopper):
+def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_params, one_per_cell, stopper):
+    global currplane
+    wantpreview, one_plane, one_plane_id = output_params
     img = Image.open(regionimg)
     img2 = Image.open(spotimg)
     if img.mode != 'I;8' and img.mode != 'I;16' and img.mode != 'L':
@@ -251,19 +265,31 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, wantpreview,
     else:
         numframes = img.n_frames
         update_progress("file", numframes)
-        for i in range(numframes):
-            if stopper.wait():
-                img.seek(i)
-                img2.seek(i)
-                im = np.array(img)
-                im2 = np.array(img2)
-                multiplier, absolute_min = bit_depth_update(im)
-                global currplane
-                currplane = i
-                cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier)
+        if one_plane:  # Only analyse single plane, useful for z-stacks.
+            if numframes >= one_plane_id:
+                if stopper.wait():
+                    img.seek(one_plane_id)
+                    img2.seek(one_plane_id)
+                    im = np.array(img)
+                    im2 = np.array(img2)
+                    multiplier, absolute_min = bit_depth_update(im)
+                    currplane = one_plane_id
+                    cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier)
+            else:
+                logevent("Image does not have " + str(one_plane_id + 1) + " planes, skipping.")
+        else:  # Analyse all planes, useful for field stacks.
+            for i in range(numframes):
+                if stopper.wait():
+                    img.seek(i)
+                    img2.seek(i)
+                    im = np.array(img)
+                    im2 = np.array(img2)
+                    multiplier, absolute_min = bit_depth_update(im)
+                    currplane = i
+                    cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier)
 
 
-def cyclefiles(regioninput, spotinput, region_settings, spot_settings, wantpreview, logfile, prevdir, one_per_cell,
+def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, logfile, prevdir, one_per_cell,
                stopper):
     global savedir, previewdir, indexnum, imgfile
     indexnum = 0
@@ -275,7 +301,7 @@ def cyclefiles(regioninput, spotinput, region_settings, spot_settings, wantprevi
         logevent(f"Analysing {regioninput[i]}")
         imgfile = regioninput[i]
         if stopper.wait():
-            cycleplanes(regioninput[i], spotinput[i], region_settings, spot_settings, wantpreview, one_per_cell,
+            cycleplanes(regioninput[i], spotinput[i], region_settings, spot_settings, output_params, one_per_cell,
                         stopper)
     update_progress("finished", 1)
     logevent("Analysis complete!")
