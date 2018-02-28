@@ -588,7 +588,7 @@ class ImageViewer(tk.Frame):
         self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Strict)", variable=self.segtype, value="High",
                                        command=lambda: self.threshold_mode("High"))
         self.autoseg.grid(column=2, row=2)
-        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Noisy)", variable=self.segtype, value="Low",
+        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Lax)", variable=self.segtype, value="Low",
                                        command=lambda: self.threshold_mode("Low"))
         self.autoseg.grid(column=3, row=2)
         self.manualseg = ttk.Radiobutton(self.segcontrols, text="Manual", variable=self.segtype, value="Manual",
@@ -1076,7 +1076,7 @@ class OutputTab(tk.Frame):
 
     def abort_analysis(self):
         process_stopper.clear()
-        self.logevent("Aborted run")
+        self.logevent("Aborting run")
         self.update_progress('finished', 0)
 
     def start_analysis(self, stopper, regioninput, spotinput):
@@ -1147,5 +1147,4 @@ if __name__ == "__main__":
 
 # TODO  - Handle file format errors.
 # TODO  - Further improve large object segmentation
-# TODO  - Stop delay
 # TODO  - Fix down arrow on mac version.
