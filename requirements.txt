@@ -1,0 +1,4 @@
+Pillow
+scikit-image
+scipy
+numpy
