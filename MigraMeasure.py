@@ -43,11 +43,17 @@ currentdepth = 0
 
 # Get path for unpacked Pyinstaller exe (MEIPASS), else default to current dir.
 def resource_path(relative_path):
+    if relative_path == 'resources/mmicon':
+        extension = ".ico"
+    elif os.name == 'nt':
+        extension = ".png"
+    else:
+        extension = ".gif"
     try:
         base_path = sys._MEIPASS
     except AttributeError:
         base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+    return os.path.join(base_path, relative_path + extension)
 
 
 def bit_depth_update(array):
@@ -85,8 +91,10 @@ class CoreWindow:
         depthname = tk.StringVar()
         depthname.set(currentdepthname)
         self.master = master
+        if os.name != 'nt':
+            self.master.tk_setPalette(background='#E7E7E7', selectForeground='#ffffff', selectBackground='#0000ff')
         self.master.wm_title("MigraMeasure")
-        self.master.iconbitmap(resource_path('resources/mmicon.ico'))
+        self.master.iconbitmap(resource_path('resources/mmicon'))
         self.master.resizable(width=False, height=True)
         self.height = self.master.winfo_screenheight()
         self.width = 740
@@ -101,9 +109,8 @@ class CoreWindow:
         self.title = tk.Label(self.header, text="MigraMeasure", font=("Arial", 25), justify=tk.CENTER)
         self.title.grid(column=2, columnspan=1, row=1, sticky=tk.E + tk.W)
 
-        self.buttontype = ttk.Style()
-        self.buttontype.configure('MM.TButton', foreground='blue')
-        self.aboutbutton = ttk.Button(self.header, text="About", command=self.about_window, style='MM.TButton')
+
+        self.aboutbutton = ttk.Button(self.header, text="About", command=self.about_window)
         self.aboutbutton.grid(column=4, row=1, rowspan=1, sticky=tk.E + tk.W, padx=25)
         self.header.grid_columnconfigure(1, weight=1)
         self.header.grid_columnconfigure(5, weight=1)
@@ -164,7 +171,7 @@ class AboutWindow:
         x = self.master.winfo_rootx()
         x += self.master.winfo_width()
         self.aboutwindow = tk.Frame(self.master)
-        self.logo = Image.open(resource_path("resources/logo.png"))
+        self.logo = Image.open(resource_path("resources/logo"))
         self.logoimg = ImageTk.PhotoImage(self.logo)
         self.logoimage = tk.Label(self.aboutwindow, image=self.logoimg)
         self.logoimage.pack(pady=(15, 0))
@@ -292,23 +299,27 @@ class InputTab(tk.Frame):
         self.spotbox.grid(column=4, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
         self.scrollbar.config(command=self.scroll_listboxes)
         self.scrollbar.grid(column=5, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
-        self.regionbox.bind("<MouseWheel>", self.mousewheel_listboxes)
-        self.spotbox.bind("<MouseWheel>", self.mousewheel_listboxes)
+        if os.name == "nt":
+            self.regionbox.bind("<MouseWheel>", self.mousewheel_listboxes)
+            self.spotbox.bind("<MouseWheel>", self.mousewheel_listboxes)
         self.file_list_box.grid_rowconfigure(1, weight=1)
         self.file_list_box.grid_rowconfigure(10, weight=1)
+        self.regionbox.insert(tk.END, "Region images will be listed here")
+        self.spotbox.insert(tk.END, "Spot images will be listed here")
+        self.file_lists_empty = True
 
         # Control Buttons
         self.move_item_up = ttk.Button(self.file_list_box, text="Up", command=lambda: self.move_list_item("up"))
-        self.upphoto = tk.PhotoImage(file=resource_path("resources/Up.png"))
+        self.upphoto = tk.PhotoImage(file=resource_path("resources/Up"))
         self.move_item_up.config(image=self.upphoto)
         self.move_item_down = ttk.Button(self.file_list_box, text="Down", command=lambda: self.move_list_item("down"))
-        self.dnphoto = tk.PhotoImage(file=resource_path("resources/Down.png"))
+        self.dnphoto = tk.PhotoImage(file=resource_path("resources/Down"))
         self.move_item_down.config(image=self.dnphoto)
         self.add_item = ttk.Button(self.file_list_box, text="Add", command=self.add_list_item)
-        self.addphoto = tk.PhotoImage(file=resource_path("resources/Add.png"))
+        self.addphoto = tk.PhotoImage(file=resource_path("resources/Add"))
         self.add_item.config(image=self.addphoto)
         self.remove_item = ttk.Button(self.file_list_box, text="Remove", command=self.remove_list_item)
-        self.delphoto = tk.PhotoImage(file=resource_path("resources/Remove.png"))
+        self.delphoto = tk.PhotoImage(file=resource_path("resources/Remove"))
         self.remove_item.config(image=self.delphoto)
         self.move_item_up.grid(column=3, row=2, padx=2, pady=5, sticky=tk.E + tk.W)
         self.move_item_down.grid(column=3, row=3, padx=2, pady=5, sticky=tk.E + tk.W)
@@ -348,6 +359,8 @@ class InputTab(tk.Frame):
     def remove_list_item(self):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         target, selected = self.get_selected()
+        if self.file_lists_empty:
+            return
         if target == "regions":
             if spotfiles[selected] == "<No File Found>":
                 del spotfiles[selected]
@@ -444,29 +457,16 @@ class InputTab(tk.Frame):
             spotkwd = self.spot_custom_text.get()
         else:
             spotkwd = self.spot_keyword.get()
-        self.regionbox.delete(0, tk.END)
-        self.spotbox.delete(0, tk.END)
         regionfiles, spotfiles, regionshortnames, spotshortnames = ms.genfilelist(self.loaddir.get(),
                                                                                   self.subdiron.get(), regionkwd,
                                                                                   spotkwd, self.searchtype.get())
-        # FILL MISSING FILES
-        if len(regionshortnames) < len(spotshortnames):
-            regionfiles += ["<No File Found>"] * (len(spotfiles) - len(regionfiles))
-            regionshortnames += ["<No File Found>"] * (len(spotshortnames) - len(regionshortnames))
-        if len(regionshortnames) > len(spotshortnames):
-            spotfiles += ["<No File Found>"] * (len(regionfiles) - len(spotfiles))
-            spotshortnames += ["<No File Found>"] * (len(regionshortnames) - len(spotshortnames))
-        for file in regionshortnames:
-            self.regionbox.insert(tk.END, file)
-        for file in spotshortnames:
-            self.spotbox.insert(tk.END, file)
-        app.regionconfig.firstview = True
-        app.spotconfig.firstview = True
+        self.update_file_list()
 
     def update_file_list(self):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         self.regionbox.delete(0, tk.END)
         self.spotbox.delete(0, tk.END)
+        self.file_lists_empty = False
         # FILL MISSING FILES
         if len(regionshortnames) < len(spotshortnames):
             regionfiles += ["<No File Found>"] * (len(spotfiles) - len(regionfiles))
@@ -531,7 +531,8 @@ class ImageViewer(tk.Frame):
         self.previewframe = ttk.Frame(self.ivframe, width=696, height=520)
         self.previewpane = tk.Label(self.previewframe)
         self.previewpane.pack()
-        self.previewpane.bind("<MouseWheel>", self.mouse_wheel)
+        if os.name == "nt":
+            self.previewpane.bind("<MouseWheel>", self.mouse_wheel)
 
         # Frame of plane controls
         self.imgcontrols = ttk.LabelFrame(self.ivframe, text="File Controls:",
@@ -551,14 +552,14 @@ class ImageViewer(tk.Frame):
         self.changepreviewbutton.grid(column=5, row=2, padx=3, ipadx=10, ipady=2)
 
         self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous", state=tk.DISABLED)
-        self.prevphoto = tk.PhotoImage(file=resource_path("resources/Left.png"))
+        self.prevphoto = tk.PhotoImage(file=resource_path("resources/Left"))
         self.prevplanebutton.config(image=self.prevphoto)
         self.prevplanebutton.grid(column=6, row=2, padx=1, pady=2)
         self.planenumber = ttk.Label(self.imgcontrols, text=(
                 "Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
         self.planenumber.grid(column=7, row=2)
         self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next", state=tk.DISABLED)
-        self.nextphoto = tk.PhotoImage(file=resource_path("resources/Right.png"))
+        self.nextphoto = tk.PhotoImage(file=resource_path("resources/Right"))
         self.nextplanebutton.config(image=self.nextphoto)
         self.nextplanebutton.grid(column=8, row=2, padx=1, pady=2)
 
@@ -586,15 +587,14 @@ class ImageViewer(tk.Frame):
         self.seglabel.grid(column=2, row=1, columnspan=3)
 
         self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Strict)", variable=self.segtype, value="High",
-                                       command=lambda: self.threshold_mode("High"))
+                                       command=self.threshold_mode)
         self.autoseg.grid(column=2, row=2)
         self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Lax)", variable=self.segtype, value="Low",
-                                       command=lambda: self.threshold_mode("Low"))
+                                       command=self.threshold_mode)
         self.autoseg.grid(column=3, row=2)
         self.manualseg = ttk.Radiobutton(self.segcontrols, text="Manual", variable=self.segtype, value="Manual",
-                                         command=lambda: self.threshold_mode("Manual"))
+                                         command=self.threshold_mode)
         self.manualseg.grid(column=4, row=2)
-
 
         # Regen Preview and Overlay Buttons
         self.regenprev = ttk.Button(self.segcontrols, text="Refresh Preview")
@@ -650,7 +650,7 @@ class ImageViewer(tk.Frame):
         self.minsizescale.grid(column=1, row=1, padx=5)
         self.setminsize = ttk.Entry(self.minsizelabel, textvariable=self.minsize, justify=tk.CENTER, )
         self.setminsize.grid(column=1, row=2, sticky=tk.S)
-        self.threshold_mode(True)
+        self.threshold_mode()
         self.regenprev.config(command=self.initiate_overlay)
         self.toggleoverlay.config(command=self.toggle_overlay)
         # Setup variables for overlay control
@@ -660,8 +660,9 @@ class ImageViewer(tk.Frame):
         self.overlaypreview = None
         self.runningstatus = False
 
-        for child in self.ivframe.children.values():
-            child.bind("<MouseWheel>", self.mouse_wheel)
+        if os.name == "nt":
+            for child in self.ivframe.children.values():
+                child.bind("<MouseWheel>", self.mouse_wheel)
 
     def activate_tab(self, imagepool, imagenamepool):
         if self.firstview is False:
@@ -693,6 +694,7 @@ class ImageViewer(tk.Frame):
         self.firstview = False
 
     def regen_preview(self):
+        validmodes = ['I;8', 'L', 'I;16']
         if len(self.previewfiletitle) > 150:
             self.previewtitle.config(text=("..." + self.previewfiletitle[-60:]))
         else:
@@ -704,23 +706,22 @@ class ImageViewer(tk.Frame):
             self.previewframe.pack_propagate(False)
             self.overlayon = False
             self.toggleoverlay.state(['!pressed'])
-        else:
-            validmodes = ['I;8', 'L', 'I;16']
-            if self.image.mode not in validmodes:
-                self.previewpane.config(image='', text="Invalid Image File Format")
-                self.planenumber.config(text=("Plane " + str(00) + " of " + str(00)))
-                self.previewframe.config(height=520)
-                self.previewframe.pack_propagate(False)
-                self.overlayon = False
-                self.toggleoverlay.state(['!pressed'])
-                return
-            self.im = np.array(self.image)
-            multiplier, absolute_min = bit_depth_update(self.im)
-            self.im2 = (self.im / multiplier).astype('uint8')
-            self.im2 = self.im2[::2, ::2]
-            self.temppreview = Image.fromarray(self.im2)
-            self.preview = ImageTk.PhotoImage(self.temppreview)
-            self.previewpane.config(image=self.preview)
+            return
+        if self.image.mode not in validmodes or self.previewfile == "<Invalid File Format>":
+            self.previewpane.config(image='', text="Invalid Image File Format")
+            self.planenumber.config(text=("Plane " + str(00) + " of " + str(00)))
+            self.previewframe.config(height=520)
+            self.previewframe.pack_propagate(False)
+            self.overlayon = False
+            self.toggleoverlay.state(['!pressed'])
+            return
+        self.im = np.array(self.image)
+        multiplier, absolute_min = bit_depth_update(self.im)
+        self.im2 = (self.im / multiplier).astype('uint8')
+        self.im2 = self.im2[::2, ::2]
+        self.temppreview = Image.fromarray(self.im2)
+        self.preview = ImageTk.PhotoImage(self.temppreview)
+        self.previewpane.config(image=self.preview)
 
     def update_plane(self, direction):
         if self.image:
@@ -759,38 +760,37 @@ class ImageViewer(tk.Frame):
     def update_file(self, changetype):
         self.nextpreviewbutton.config(state=tk.DISABLED)
         self.prevpreviewbutton.config(state=tk.DISABLED)
-
         if changetype == "fwd":
             self.fileid += 1
-            self.previewfile = self.imagepool[self.fileid]
-            self.previewfiletitle = self.imagenamepool[self.fileid]
-            if self.previewfile != "<No File Found>":
-                self.image = Image.open(self.previewfile)
-            self.regen_preview()
-
+            self.open_file(False)
         elif changetype == "rev":
             self.fileid -= 1
-            self.previewfile = self.imagepool[self.fileid]
-            self.previewfiletitle = self.imagenamepool[self.fileid]
-            if self.previewfile != "<No File Found>":
-                self.image = Image.open(self.previewfile)
-            self.regen_preview()
-
+            self.open_file(False)
         elif changetype == "new":
             self.previewfile = tkfiledialog.askopenfilename(filetypes=[('Tiff file', '*.tif')])
-
             if self.previewfile:
-                self.previewfiletitle = self.previewfile
-                self.image = Image.open(self.previewfile)
-            self.regen_preview()
-
+                self.open_file(True)
+            else:
+                self.regen_preview()
         if self.fileid > 0:
             self.prevpreviewbutton.config(state=tk.NORMAL)
         if self.fileid + 1 < len(self.imagepool):
             self.nextpreviewbutton.config(state=tk.NORMAL)
-
         self.planeid = 1
         self.update_plane("none")
+
+    def open_file(self, isnew):
+        if isnew:
+            self.previewfiletitle = self.previewfile
+        else:
+            self.previewfile = self.imagepool[self.fileid]
+            self.previewfiletitle = self.imagenamepool[self.fileid]
+        if self.previewfile != "<No File Found>":
+            try:
+                self.image = Image.open(self.previewfile)
+            except OSError:
+                self.previewfile = "<Invalid File Format>"
+        self.regen_preview()
 
     def segmentation_preview(self):
         self.progress_var.set(0)
@@ -853,7 +853,7 @@ class ImageViewer(tk.Frame):
             event.delta = int(event.delta / 120)
         self.ivcanvas.yview_scroll(-event.delta, "units")
 
-    def threshold_mode(self, autostatus):
+    def threshold_mode(self):
         if self.segtype.get() == "Manual":
             stateset = '!disabled'
         else:
@@ -962,7 +962,7 @@ class OutputTab(tk.Frame):
         self.currlog.bind("<Button-1>", self.save_file_set)
         self.prevdir.bind("<Button-1>", self.preview_directory_set)
         self.widgetslist = [self.logselect, self.currlog, self.prevsaveselect, self.prevdir, self.prevsavecheck,
-                            self.singlespotcheck]
+                            self.singlespotcheck, self.singleplanecheck, self.singleplaneentry]
         self.filelimit = 0
         self.planelimit = 0
         self.celllimit = 0
@@ -998,7 +998,7 @@ class OutputTab(tk.Frame):
         self.logbox.see(tk.END)
 
     def save_file_set(self, *args):
-
+        global firstrun
         logfile = tkfiledialog.asksaveasfile(mode='w', defaultextension='.csv', initialfile='output.csv',
                                              title='Save output file')
         if logfile:
@@ -1006,6 +1006,7 @@ class OutputTab(tk.Frame):
             self.logtext.set(logfile.name)
             self.savestatus = True
             self.logevent("Save file set successfully.")
+            firstrun = True
         else:
             self.savestatus = False
             self.logtext.set("Create a data log file")
@@ -1042,7 +1043,7 @@ class OutputTab(tk.Frame):
             if os.path.isdir(self.previewsavedir.get()) is False:
                 self.logevent("Unable to run: No preview directory set")
                 return
-        if self.one_per_cell.get() and self.singleplaneentry.get() == "":
+        if self.one_plane.get() and self.singleplaneentry.get() == "":
             self.logevent("Unable to run: Single plane mode active but no plane specified.")
             return
         finalregionfiles = [file for index, file in enumerate(regionfiles) if
@@ -1066,7 +1067,10 @@ class OutputTab(tk.Frame):
             widget.state(['disabled'])
         self.currlog.unbind("<Button 1>")
         self.prevdir.unbind("<Button 1>")
-        global process_stopper
+        global process_stopper, firstrun
+        if firstrun:
+            ms.headers()
+            firstrun = False
         process_stopper = threading.Event()
         process_stopper.set()
         work_thread = threading.Thread(target=self.start_analysis,
@@ -1145,6 +1149,11 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO  - Handle file format errors.
 # TODO  - Further improve large object segmentation
-# TODO  - Fix down arrow on mac version.
+# TODO  - Only write headers once.
+# TODO  - Limit object size for centroids. Avoid background.
+# TODO  - S12 and S2 errors.
+# TODO  - Text limit on mac list boxes. Widen.
+# TODO  - Point checker
+# TODO  - Merge windows and mac file.
+# TODO  - Record object size/spot size

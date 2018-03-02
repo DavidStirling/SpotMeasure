@@ -158,33 +158,39 @@ def find_perim(roiregion):
 
 # Returns list of coordinates in the line which intersects centroid and spot.
 def get_line_points(center, spot, inputimage):
-    points = [center, spot]
-    xcoords, ycoords = zip(*points)
-    eqinput = np.vstack([xcoords, np.ones(len(xcoords))]).T
-    if os.name == 'nt':
-        m, g = np.linalg.lstsq(eqinput, ycoords, rcond=None)[0]
-    else:
-        m, g = np.linalg.lstsq(eqinput, ycoords)[0]
     maxhor = inputimage.shape[1]
     maxver = inputimage.shape[0]
-    ver2 = (maxhor - g) / m  # Maximum vertical
-    hor2 = (m * maxver) + g  # Maximum horizontal
-    ver1 = (0 - g) / m  # Horizontal = 0
-    hor1 = g  # Vertical = 0
-    plotpoints = []
-    # Select coordinates within the bounds of the image.
-    # Might want to add some validation to check if everything works
-    if 0 < ver1 < maxver:
-        plotpoints += [int(ver1), 0]
-    if 0 < hor1 < maxhor:
-        plotpoints += [0, int(hor1)]
-    if 0 < ver2 < maxver:
-        plotpoints += [int(ver2), maxhor]
-    if 0 < hor2 < maxhor:
-        plotpoints += [maxver, int(hor2)]
-    draw_line = line(plotpoints[0], plotpoints[1], plotpoints[2], plotpoints[3])
-    linepoints = np.transpose(draw_line)
-    linepoints = np.ndarray.tolist(linepoints)
+    if center[0] == spot[0]:  # No need to do maths if line is perfectly horizontal/vertical.
+        linepoints = [[center[0], i] for i in range(maxhor)]
+    elif center[1] == spot[1]:
+        linepoints = [[center[1], i] for i in range(maxver)]
+    else:  # Use algebra to find the equation of a line through the points.
+        points = [center, spot]
+        xcoords, ycoords = zip(*points)
+        eqinput = np.vstack([xcoords, np.ones(len(xcoords))]).T
+        if os.name == 'nt':
+            m, g = np.linalg.lstsq(eqinput, ycoords, rcond=None)[0]
+        else:
+            m, g = np.linalg.lstsq(eqinput, ycoords)[0]
+        ver2 = (maxhor - g) / m  # Maximum vertical
+        hor2 = (m * maxver) + g  # Maximum horizontal
+        ver1 = (0 - g) / m  # Horizontal = 0
+        hor1 = g  # Vertical = 0
+        plotpoints = []
+        # Select coordinates where lines would intersect with the borders of the image.
+        if 0 < ver1 < maxver:
+            plotpoints += [int(ver1), 0]
+        if 0 < hor1 < maxhor:
+            plotpoints += [0, int(hor1)]
+        if 0 < ver2 < maxver:
+            plotpoints += [int(ver2), maxhor]
+        if 0 < hor2 < maxhor:
+            plotpoints += [maxver, int(hor2)]
+        # Plotpoints should now always contain 2 coordinates.
+        # Future: Test for error when perfectly aligned e.g. (0,0) --> (10,10)
+        draw_line = line(plotpoints[0], plotpoints[1], plotpoints[2], plotpoints[3])
+        linepoints = np.transpose(draw_line)
+        linepoints = np.ndarray.tolist(linepoints)
     return linepoints
 
 
@@ -254,8 +260,12 @@ def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cel
 def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_params, one_per_cell, stopper):
     global currplane
     wantpreview, one_plane, one_plane_id = output_params
-    img = Image.open(regionimg)
-    img2 = Image.open(spotimg)
+    try:
+        img = Image.open(regionimg)
+        img2 = Image.open(spotimg)
+    except OSError:
+        logevent("Invalid image format, skipping file.")
+        return
     if img.mode != 'I;8' and img.mode != 'I;16' and img.mode != 'L':
         logevent("Invalid region file type, skipping")
         update_progress("file", 0)
@@ -295,7 +305,6 @@ def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_pa
     indexnum = 0
     savedir = logfile
     previewdir = prevdir
-    headers()
     update_progress("starting", len(regioninput))
     for i in range(len(regioninput)):
         logevent(f"Analysing {regioninput[i]}")
@@ -318,9 +327,9 @@ def headers():
             headerwriter.writerow(headings)
         f.close()
     except AttributeError:
-        print("Directory appears to be invalid")
+        logevent("Directory appears to be invalid")
     except PermissionError:
-        print("Unable to write to save file. Please check write permissions.")
+        logevent("Unable to write to save file. Please check write permissions.")
     except OSError:
         logevent("OSError, failed to write to save file.")
 
