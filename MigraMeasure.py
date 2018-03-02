@@ -97,8 +97,12 @@ class CoreWindow:
         self.master.iconbitmap(resource_path('resources/mmicon'))
         self.master.resizable(width=False, height=True)
         self.height = self.master.winfo_screenheight()
-        self.width = 740
-        self.desiredheight = 825
+        if os.name == 'nt':
+            self.width = 740
+            self.desiredheight = 825
+        else:
+            self.width = 775
+            self.desiredheight = 880
         if self.height < self.desiredheight:
             self.master.geometry('%sx%s' % (self.width, self.height - 50))
         else:
@@ -131,8 +135,8 @@ class CoreWindow:
 
         # Construct tab contents
         self.input = InputTab(self.tab1)
-        self.regionconfig = ImageViewer(self.tab2, "regions")
-        self.spotconfig = ImageViewer(self.tab3, "spots")
+        self.regionconfig = ImageViewer(self.tab2, "region")
+        self.spotconfig = ImageViewer(self.tab3, "spot")
         self.logconfig = OutputTab(self.tab4)
         self.tabControl.bind('<Button-1>', self.on_click)
 
@@ -491,7 +495,7 @@ class ImageViewer(tk.Frame):
         self.fileid = 0
         self.segtype = tk.StringVar()
 
-        if self.type == "regions":
+        if self.type == "region":
             global regionfiles, regionshortnames
             self.imagepool = regionfiles
             self.imagenamepool = regionshortnames
@@ -499,7 +503,7 @@ class ImageViewer(tk.Frame):
             self.default_smoothing = 10
             self.default_minsize = 1000
             self.default_thresh = 16
-        elif self.type == "spots":
+        elif self.type == "spot":
             global spotfiles, spotshortnames
             self.imagepool = spotfiles
             self.imagenamepool = spotshortnames
@@ -804,8 +808,8 @@ class ImageViewer(tk.Frame):
             self.progress_var.set(0)
             return
         # Return 8 bit array for display
-        labelled = ms.seg_preview(self.im, self.segtype.get(), self.thresh.get(), self.smooth.get(),
-                                  self.minsize.get(), self.type)
+        seg_settings = (self.segtype.get(), self.thresh.get(), self.smooth.get(), self.minsize.get())
+        labelled = ms.getseg(self.im, seg_settings, self.type, True)
         miniseg = labelled[::2, ::2]
         self.segoverlay = Image.fromarray(miniseg)
         if self.overlayon is False:  # Abandon overlaying if mode already changed
@@ -1069,7 +1073,7 @@ class OutputTab(tk.Frame):
         self.prevdir.unbind("<Button 1>")
         global process_stopper, firstrun
         if firstrun:
-            ms.headers()
+            ms.headers(self.logtext.get())
             firstrun = False
         process_stopper = threading.Event()
         process_stopper.set()
@@ -1091,7 +1095,7 @@ class OutputTab(tk.Frame):
         spot_settings = (app.spotconfig.segtype.get(), app.spotconfig.thresh.get(), app.spotconfig.smooth.get(),
                          app.spotconfig.minsize.get())
 
-        ms.cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, self.logtext.get(),
+        ms.cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params,
                       self.previewsavedir.get(), self.one_per_cell.get(), stopper)
 
     def update_progress(self, updatetype, limit):

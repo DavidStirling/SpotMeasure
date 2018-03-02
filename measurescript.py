@@ -49,41 +49,7 @@ def betterpreview(regioninput, spotinput, centcoord, perimcoord, spotcoord, name
     preview.save(savetgt)
 
 
-def seg_preview(imagearray, automatic, threshold, smoothing, minsize, imgtype):
-    multiplier, absolute_min = bit_depth_update(imagearray)
-    imagearray2 = imagearray.copy()
-    if automatic != "Manual":
-        if imgtype == "spots":
-            absolute_min *= 2
-            imgmax = maximum(imagearray2 // multiplier, disk(10))
-            if automatic == "Low":
-                threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
-            elif automatic == "High":
-                threshold = (threshold_li(imgmax) * multiplier)
-        if imgtype == "regions":
-            if automatic == "High":
-                threshold = threshold_li(imagearray2)  # li > otsu for finding threshold when background is low
-            elif automatic == "Low":
-                threshold = threshold_otsu(imagearray2)
-        if absolute_min > threshold:
-            threshold = absolute_min  # Set a minimum threshold in case an image is blank.
-    mask = imagearray2 < threshold
-    imagearray2[mask] = 0  # Remove background
-    binary = imagearray2 > 0
-    binary = remove_small_holes(binary, min_size=1000)  # Clear up any holes
-    distance = ndi.distance_transform_edt(binary)  # Use smoothed distance transform to find the midpoints.
-    blurred = ndi.gaussian_filter(distance, sigma=smoothing)
-    local_maxi = peak_local_max(blurred, indices=False)
-    markers = ndi.label(local_maxi)[0]  # Apply labels to each peak
-    labels = watershed(-distance, markers, mask=binary)  # Watershed segment
-    segmentation = clear_border(labels)  # Remove segments touching borders
-    segmentation = remove_small_objects(segmentation, min_size=minsize)
-    labelled = label2rgb(segmentation, image=imagearray2, bg_label=0, bg_color=(0, 0, 0), kind='overlay')
-    labelled = (labelled * 256).astype('uint8')
-    return labelled
-
-
-def getseg(imagearray, settings, imgtype):
+def getseg(imagearray, settings, imgtype, preview_mode):  # Segments input images
     automatic, threshold, smoothing, minsize = settings
     multiplier, absolute_min = bit_depth_update(imagearray)
     imagearray2 = imagearray.copy()
@@ -91,17 +57,15 @@ def getseg(imagearray, settings, imgtype):
         if imgtype == "spot":
             absolute_min *= 2
             imgmax = maximum(imagearray2 // multiplier, disk(10))
-            if automatic == "Low":
-                threshold = (threshold_otsu(imgmax) * multiplier)  # Generate otsu threshold for peaks.
-            elif automatic == "High":
-                threshold = (threshold_li(imgmax) * multiplier)
+            if automatic == "High":
+                threshold = (threshold_li(imgmax) * multiplier)  # Generate otsu threshold for peaks.
+            elif automatic == "Low":
+                threshold = (threshold_otsu(imgmax) * multiplier)
         if imgtype == "region":
             if automatic == "High":
                 threshold = threshold_li(imagearray2)  # li > otsu for finding threshold when background is low
             elif automatic == "Low":
                 threshold = threshold_otsu(imagearray2)
-        if absolute_min > threshold:
-            threshold = absolute_min  # Set a minimum threshold in case an image is blank.
         if absolute_min > threshold:
             threshold = absolute_min  # Set a minimum threshold in case an image is blank.
     mask = imagearray2 < threshold
@@ -115,6 +79,10 @@ def getseg(imagearray, settings, imgtype):
     labels = watershed(-distance, markers, mask=binary)  # Watershed segment
     segmentation = clear_border(labels)  # Remove segments touching borders
     segmentation = remove_small_objects(segmentation, min_size=minsize)
+    if preview_mode is True:
+        labelled = label2rgb(segmentation, image=imagearray2, bg_label=0, bg_color=(0, 0, 0), kind='overlay')
+        labelled = (labelled * 256).astype('uint8')
+        return labelled
     properties = skimage.measure.regionprops(segmentation)
     centroids = [[int(point) for point in pair] for pair in [item.centroid for item in properties]]
     labels = np.unique(segmentation)[1:]
@@ -228,8 +196,8 @@ def gennumbers(centpoint, perimpoint, tgtpoint):
 
 
 def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier):
-    regionseg, regionproperties, regioncentroids, regionlabels = getseg(im, region_settings, 'region')
-    spotseg, spotcentroids, spotcentroids, spotlabels = getseg(im2, spot_settings, 'spot')
+    regionseg, regionproperties, regioncentroids, regionlabels = getseg(im, region_settings, 'region', False)
+    spotseg, spotcentroids, spotcentroids, spotlabels = getseg(im2, spot_settings, 'spot', False)
     global indexnum
     global cellnum
     spots = 0
@@ -299,11 +267,10 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_param
                     cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier)
 
 
-def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, logfile, prevdir, one_per_cell,
+def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, prevdir, one_per_cell,
                stopper):
     global savedir, previewdir, indexnum, imgfile
     indexnum = 0
-    savedir = logfile
     previewdir = prevdir
     update_progress("starting", len(regioninput))
     for i in range(len(regioninput)):
@@ -317,10 +284,12 @@ def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_pa
 
 
 # Writes headers in output file
-def headers():
+def headers(logfile):
     global savedir
+    savedir = logfile
     headings = ('File', 'Plane', 'Cell ID', 'Spot ID', 'Perimeter - Centroid', 'Perimeter - Spot', 'Spot - Centroid',
                 'Percent Migration')
+
     try:
         with open(savedir, 'w', newline="\n", encoding="utf-8") as f:
             headerwriter = csvwriter(f)
