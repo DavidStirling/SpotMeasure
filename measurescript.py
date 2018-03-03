@@ -49,23 +49,24 @@ def betterpreview(regioninput, spotinput, centcoord, perimcoord, spotcoord, name
     preview.save(savetgt)
 
 
+# Create segmentation of image
 def getseg(imagearray, settings, imgtype, preview_mode):  # Segments input images
     automatic, threshold, smoothing, minsize = settings
     multiplier, absolute_min = bit_depth_update(imagearray)
     imagearray2 = imagearray.copy()
     if automatic != "Manual":
-        if imgtype == "spot":
+        if imgtype == "region":
+            if automatic == "High":
+                threshold = threshold_li(imagearray2)  # li > otsu for finding threshold when background is low
+            elif automatic == "Low":
+                threshold = threshold_otsu(imagearray2)
+        elif imgtype == "spot":
             absolute_min *= 2
             imgmax = maximum(imagearray2 // multiplier, disk(10))
             if automatic == "High":
                 threshold = (threshold_li(imgmax) * multiplier)  # Generate otsu threshold for peaks.
             elif automatic == "Low":
                 threshold = (threshold_otsu(imgmax) * multiplier)
-        if imgtype == "region":
-            if automatic == "High":
-                threshold = threshold_li(imagearray2)  # li > otsu for finding threshold when background is low
-            elif automatic == "Low":
-                threshold = threshold_otsu(imagearray2)
         if absolute_min > threshold:
             threshold = absolute_min  # Set a minimum threshold in case an image is blank.
     mask = imagearray2 < threshold
@@ -79,21 +80,20 @@ def getseg(imagearray, settings, imgtype, preview_mode):  # Segments input image
     labels = watershed(-distance, markers, mask=binary)  # Watershed segment
     segmentation = clear_border(labels)  # Remove segments touching borders
     segmentation = remove_small_objects(segmentation, min_size=minsize)
-    if preview_mode is True:
+    if preview_mode:
         labelled = label2rgb(segmentation, image=imagearray2, bg_label=0, bg_color=(0, 0, 0), kind='overlay')
         labelled = (labelled * 256).astype('uint8')
         return labelled
-    properties = skimage.measure.regionprops(segmentation)
-    centroids = [[int(point) for point in pair] for pair in [item.centroid for item in properties]]
     labels = np.unique(segmentation)[1:]
-    return segmentation, properties, centroids, labels
+    properties = skimage.measure.regionprops(segmentation, intensity_image=imagearray)
+    return segmentation, properties, labels
 
 
-def makesubsets(roilabel, regionseg, regionprops, regionc, spotc, origregion, origspot):
+def makesubsets(roilabel, regionseg, regioncentroids, spotcentroids, origregion, origspot):
     labellist = np.ndarray.tolist(np.unique(regionseg))
     # Need to find index of correct label
     indexid = labellist.index(roilabel)
-    a, b, c, d = regionprops[indexid - 1].bbox
+    a, b, c, d = regioncentroids[indexid - 1][2]
     # Add a border just to ease visualisation
     a -= 1
     b -= 1
@@ -103,25 +103,27 @@ def makesubsets(roilabel, regionseg, regionprops, regionc, spotc, origregion, or
     roiregionraw = origregion.copy()[a:c, b:d]
     roispotraw = origspot.copy()[a:c, b:d]
     # Generate filtespot mask
-    regioncentroid = regionc[indexid - 1]
+    regioncentroid = [regioncentroids[indexid - 1][0], regioncentroids[indexid - 1][1]]
     # Remove other regions from the image
     roiregion = np.where(roiregion == roilabel, 65000, 0)
     roiregionlist = np.transpose(np.nonzero(roiregion))
     # Create list of points within region
     roiregionlist = np.ndarray.tolist(roiregionlist)
-    roiregioncentroid = [regioncentroid[0] - a, regioncentroid[1] - b]
+    roiregioncentroid = [[regioncentroid[0][0] - a, regioncentroid[0][1] - b], regioncentroid[1]]
     # Filter spot centroid list for tgt region & correct for subsetting.
-    roispotcentroids = [[x[0] - a, x[1] - b] for x in spotc if (c > x[0] > a) and (d > x[1] > b)]
+    roispotcentroids = [([spot[0][0] - a, spot[0][1] - b], spot[1], spot[2], spot[3]) for spot in spotcentroids if
+                        (c > spot[0][0] > a) and (d > spot[0][1] > b)]
     # Check the centroids are within the nuclei
-    roispotcentroids = [x for x in roispotcentroids if x in roiregionlist]
+    roispotcentroids = [spot for spot in roispotcentroids if spot[0] in roiregionlist]
     return roiregion, roiregioncentroid, roispotcentroids, roiregionraw, roispotraw
 
 
+# Get a list of coordinates in the perimeter.
 def find_perim(roiregion):
     edges = find_boundaries(roiregion)
     perim = np.transpose(np.nonzero(edges))
     perim = np.ndarray.tolist(perim)
-    return perim  # Return list of coordinates in the perimeter.
+    return perim
 
 
 # Returns list of coordinates in the line which intersects centroid and spot.
@@ -195,36 +197,42 @@ def gennumbers(centpoint, perimpoint, tgtpoint):
     return totaldist, spottoperim, spottocenter, percentmigration
 
 
+# Cycle through each cell in an image.
 def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier):
-    regionseg, regionproperties, regioncentroids, regionlabels = getseg(im, region_settings, 'region', False)
-    spotseg, spotcentroids, spotcentroids, spotlabels = getseg(im2, spot_settings, 'spot', False)
-    global indexnum
-    global cellnum
+    regionseg, regionproperties, regionlabels = getseg(im, region_settings, 'region', False)
+    spotseg, spotproperties, spotlabels = getseg(im2, spot_settings, 'spot', False)
+    regioncentroids = [((int(item.centroid[0]), int(item.centroid[1])), item.area, item.bbox) for item in
+                       regionproperties]
+    spotcentroids = [((int(item.weighted_centroid[0]), int(item.weighted_centroid[1])), item.area, item.mean_intensity,
+                      (item.area * item.mean_intensity)) for item in spotproperties]
+    global indexnum, cellnum
     spots = 0
     update_progress("plane", len(regionlabels))
     for cell in regionlabels:
         if stopper.wait():
             update_progress("cell", 0)
-            roiregion, regioncent, spotcents, braw, rraw = makesubsets(cell, regionseg, regionproperties,
-                                                                       regioncentroids, spotcentroids, im, im2)
+            roiregion, regioncent, spotcents, braw, rraw = makesubsets(cell, regionseg, regioncentroids, spotcentroids,
+                                                                       im, im2)
             perim = find_perim(roiregion)
             if len(spotcents) > 0:
                 cellnum += 1
             if (len(spotcents) == 1 and one_per_cell is True) or one_per_cell is False:
                 for spot in spotcents:
-                    linepoints = get_line_points(regioncent, spot, roiregion)
-                    perimpoint = find_perim_intersect(perim, linepoints, spot)
-                    dist, spotcenter, spotperim, pctmig = gennumbers(regioncent, perimpoint, spot)
+                    linepoints = get_line_points(regioncent[0], spot[0], roiregion)
+                    perimpoint = find_perim_intersect(perim, linepoints, spot[0])
+                    dist, spotcenter, spotperim, pctmig = gennumbers(regioncent[0], perimpoint, spot[0])
                     global imgfile
-                    datawriter(imgfile, (dist, spotcenter, spotperim, pctmig))
+                    datawriter(imgfile, (
+                    regioncent[1], spot[1], spot[2], spot[3], dist, spotcenter, spotperim, ('%0.2f' % pctmig)))
                     spots += 1
                     indexnum += 1
                     if wantpreview is True:
-                        betterpreview(braw, rraw, regioncent, perimpoint, spot, indexnum, multiplier)
+                        betterpreview(braw, rraw, regioncent[0], perimpoint, spot[0], indexnum, multiplier)
     logevent("Analysed " + str(spots) + " spots in " + str(len(regionlabels)) + " cells.")
     return
 
 
+# Cycle through image planes.
 def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_params, one_per_cell, stopper):
     global currplane
     wantpreview, one_plane, one_plane_id = output_params
@@ -287,7 +295,8 @@ def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_pa
 def headers(logfile):
     global savedir
     savedir = logfile
-    headings = ('File', 'Plane', 'Cell ID', 'Spot ID', 'Perimeter - Centroid', 'Perimeter - Spot', 'Spot - Centroid',
+    headings = ('File', 'Plane', 'Cell ID', 'Spot ID', 'Region Area', 'Spot Area', 'Spot Average Intensity',
+                'Spot Integrated Intensity', 'Perimeter -> Centroid', 'Perimeter -> Spot', 'Spot -> Centroid',
                 'Percent Migration')
 
     try:
@@ -306,7 +315,7 @@ def headers(logfile):
 # Write data to CSV file
 def datawriter(exportpath, exportdata):
     global currplane
-    writeme = tuple([exportpath]) + tuple([currplane + 1]) + tuple([cellnum]) + tuple([indexnum + 1]) + exportdata
+    writeme = (exportpath, currplane + 1, cellnum, indexnum + 1) + exportdata
     try:
         with open(savedir, 'a', newline="\n", encoding="utf-8") as f:
             mainwriter = csvwriter(f)

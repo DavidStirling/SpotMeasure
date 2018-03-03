@@ -16,24 +16,24 @@ along with this program. If not, see <http://www.gnu.org/licenses/>."""
 
 import os
 import sys
-import threading
+from threading import Event, Thread
 import tkinter as tk
 import tkinter.filedialog as tkfiledialog
 from tkinter import ttk
 
-import numpy as np
-from PIL import Image
-from PIL import ImageTk
+from numpy import array
+from PIL import Image, ImageTk
 
 import measurescript as ms
 
 # Global Variables
-version = "0.5 Beta"
+version = "0.6 Beta"
 regionfiles = []
 spotfiles = []
 regionshortnames = []
 spotshortnames = []
 firstrun = True  # Do we need to write headers to the output file?
+# Parameters for different display modes.
 depthmap = {0: ("8-bit", 1, 256, 16), 1: ("10-bit", 4, 1024, 64), 2: ("12-bit", 16, 4096, 256),
             3: ("16-bit", 256, 65536, 4096)}  # (ID, multiplier, maxrange, absmin)
 currentdepthname, scalemultiplier, maxrange, absmin = depthmap[0]
@@ -56,9 +56,10 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path + extension)
 
 
-def bit_depth_update(array):
+# Detect and update scaling factors for displaying images of different bit depths.
+def bit_depth_update(imgarray):
     global depthmap, currentdepth, scalemultiplier, maxrange, absmin, depthname, manualbitdepth
-    maxvalue = array.max()
+    maxvalue = imgarray.max()
     if manualbitdepth:
         return scalemultiplier, absmin
     if maxvalue < 256:
@@ -87,10 +88,10 @@ def bit_depth_update(array):
 class CoreWindow:
     # Core tabbed GUI
     def __init__(self, master):
+        self.master = master
         global currentdepthname, depthname
         depthname = tk.StringVar()
         depthname.set(currentdepthname)
-        self.master = master
         if os.name != 'nt':
             self.master.tk_setPalette(background='#E7E7E7', selectForeground='#ffffff', selectBackground='#0000ff')
         self.master.wm_title("MigraMeasure")
@@ -112,7 +113,6 @@ class CoreWindow:
         self.header = tk.Frame()
         self.title = tk.Label(self.header, text="MigraMeasure", font=("Arial", 25), justify=tk.CENTER)
         self.title.grid(column=2, columnspan=1, row=1, sticky=tk.E + tk.W)
-
 
         self.aboutbutton = ttk.Button(self.header, text="About", command=self.about_window)
         self.aboutbutton.grid(column=4, row=1, rowspan=1, sticky=tk.E + tk.W, padx=25)
@@ -144,6 +144,7 @@ class CoreWindow:
         self.about_window = None
         self.app = None
 
+    # Detect if a tab has been activated to trigger image loading from the file list
     def on_click(self, event):
         global regionfiles, regionshortnames, spotfiles, spotshortnames
         activated_tab = self.tabControl.tk.call(self.tabControl._w, "identify", "tab", event.x, event.y)
@@ -152,6 +153,7 @@ class CoreWindow:
         elif activated_tab == 2:
             self.spotconfig.activate_tab(spotfiles, spotshortnames)
 
+    # Create an about window
     def about_window(self):
         x = self.master.winfo_rootx()
         y = self.master.winfo_rooty()
@@ -189,7 +191,7 @@ class AboutWindow:
         self.line4.pack(pady=(0, 15))
         self.aboutwindow.pack()
 
-
+# Enable and clear custom entry boxes
 def customtoggle(kwd, target):
     if kwd == "Custom":
         target.config(state=tk.NORMAL)
@@ -330,7 +332,8 @@ class InputTab(tk.Frame):
         self.add_item.grid(column=3, row=4, padx=2, pady=5, sticky=tk.E + tk.W)
         self.remove_item.grid(column=3, row=5, padx=2, pady=5, sticky=tk.E + tk.W)
 
-    def depthboxcallback(*args):
+    # Update interface and default values when user specifies bit depth manually.
+    def depthboxcallback(self, *unusedargs):
         global depthmap, currentdepth, scalemultiplier, maxrange, absmin, depthname, manualbitdepth
         depthid = app.input.bitcheck.current()
         depthid -= 1  # Subtract to match auto selection
@@ -352,6 +355,7 @@ class InputTab(tk.Frame):
         app.regionconfig.firstview = True
         app.spotconfig.firstview = True
 
+    # Determine which file list the user has selected.
     def get_selected(self):
         if self.regionbox.curselection():
             return "regions", self.regionbox.curselection()[0]
@@ -360,6 +364,7 @@ class InputTab(tk.Frame):
         else:
             return "none", 0
 
+    # Delete an item from the file list.
     def remove_list_item(self):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         target, selected = self.get_selected()
@@ -387,6 +392,7 @@ class InputTab(tk.Frame):
             return
         self.update_file_list()
 
+    # Add an item to the file list.
     def add_list_item(self):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         maxlen = 50
@@ -412,6 +418,7 @@ class InputTab(tk.Frame):
             self.update_file_list()
         return
 
+    # Re-order file list items.
     def move_list_item(self, direction):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         target, selected = self.get_selected()
@@ -432,10 +439,12 @@ class InputTab(tk.Frame):
             self.update_file_list()
             self.spotbox.selection_set(newindex)
 
+    # Scroll both file lists together.
     def scroll_listboxes(self, *args):
         self.regionbox.yview(*args)
         self.spotbox.yview(*args)
 
+    # Allow mousewheel scrolling of list boxes.
     def mousewheel_listboxes(self, event):
         if os.name == 'nt':
             event.delta = int(event.delta / 60)
@@ -443,6 +452,7 @@ class InputTab(tk.Frame):
         self.spotbox.yview_scroll(-event.delta, "units")
         return "break"  # Prevent default bindings from activating and trying to scroll twice
 
+    # Prompt to select an input directory.
     def select_directory(self, *args):
         tryloaddir = tkfiledialog.askdirectory(title='Choose directory')
         if tryloaddir:
@@ -451,6 +461,7 @@ class InputTab(tk.Frame):
             return
         app.logconfig.logevent("Directory not selected")
 
+    # Generate file lists.
     def populate_file_list(self):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         if self.region_keyword.get() == "Custom":
@@ -466,6 +477,7 @@ class InputTab(tk.Frame):
                                                                                   spotkwd, self.searchtype.get())
         self.update_file_list()
 
+    # Populate list boxes and fill in missing files.
     def update_file_list(self):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         self.regionbox.delete(0, tk.END)
@@ -719,7 +731,7 @@ class ImageViewer(tk.Frame):
             self.overlayon = False
             self.toggleoverlay.state(['!pressed'])
             return
-        self.im = np.array(self.image)
+        self.im = array(self.image)
         multiplier, absolute_min = bit_depth_update(self.im)
         self.im2 = (self.im / multiplier).astype('uint8')
         self.im2 = self.im2[::2, ::2]
@@ -831,7 +843,7 @@ class ImageViewer(tk.Frame):
             self.previewprogress.stop()
             self.progress_var.set(0)
             return
-        overlay_thread = threading.Thread(target=self.segmentation_preview)
+        overlay_thread = Thread(target=self.segmentation_preview)
         overlay_thread.setDaemon(True)
         overlay_thread.start()
         self.overlayon = True
@@ -890,15 +902,15 @@ class OutputTab(tk.Frame):
         # Set Preview Save Folder
 
         self.previewsavedir = tk.StringVar()
-        self.previewsavedir.set("Select Preview Save Directory")
-        self.prevsaveselect = ttk.Button(self.outputcontrols, text="Select Preview Save Directory",
+        self.previewsavedir.set("Select a directory to save result images to")
+        self.prevsaveselect = ttk.Button(self.outputcontrols, text="Select Save Directory",
                                          command=self.preview_directory_set)
         self.prevsaveselect.grid(column=11, row=2, rowspan=1, padx=5, sticky=tk.E + tk.W)
         self.prevdir = ttk.Entry(self.outputcontrols, textvariable=self.previewsavedir, takefocus=False)
         self.prevdir.grid(column=1, columnspan=10, row=2, ipadx=150, padx=5, pady=5, sticky=tk.E + tk.W)
         self.prevsavon = tk.BooleanVar()
         self.prevsavon.set(True)
-        self.prevsavecheck = ttk.Checkbutton(self.outputcontrols, text="Save Previews", variable=self.prevsavon,
+        self.prevsavecheck = ttk.Checkbutton(self.outputcontrols, text="Save Result Images", variable=self.prevsavon,
                                              onvalue=True, offvalue=False, command=self.toggle_preview_status)
         self.prevsavecheck.grid(column=7, row=3, columnspan=4, sticky=tk.E)
 
@@ -1003,8 +1015,15 @@ class OutputTab(tk.Frame):
 
     def save_file_set(self, *args):
         global firstrun
-        logfile = tkfiledialog.asksaveasfile(mode='w', defaultextension='.csv', initialfile='output.csv',
+        try:
+            logfile = tkfiledialog.asksaveasfile(mode='w', defaultextension='.csv', initialfile='output.csv',
                                              title='Save output file')
+        except AttributeError:
+            logevent("Save path appears to be invalid")
+        except PermissionError:
+            logevent("Cannot write to save file, please make sure it isn't open in another program.")
+        except OSError:
+            logevent("OSError, failed to write to save file.")
         if logfile:
             logfile.close()
             self.logtext.set(logfile.name)
@@ -1017,14 +1036,14 @@ class OutputTab(tk.Frame):
             self.logevent("Save file selection unsuccessful.")
 
     def preview_directory_set(self, *args):
-        setprevdir = tkfiledialog.askdirectory(title='Choose directory in which to save preview images')
+        setprevdir = tkfiledialog.askdirectory(title='Choose directory in which to save result images')
         if setprevdir:
             self.previewsavedir.set(setprevdir + '/')
             self.previewdirstatus = True
-            self.logevent("Preview save directory set successfully.")
+            self.logevent("Result image save directory set successfully.")
         else:
             self.previewdirstatus = False
-            self.logevent("Preview directory selection unsuccessful.")
+            self.logevent("Result image directory selection unsuccessful.")
 
     def toggle_preview_status(self):
         if self.prevsavon.get() is True:
@@ -1045,7 +1064,7 @@ class OutputTab(tk.Frame):
             return
         if self.prevsavon.get():
             if os.path.isdir(self.previewsavedir.get()) is False:
-                self.logevent("Unable to run: No preview directory set")
+                self.logevent("Unable to run: No result image directory set")
                 return
         if self.one_plane.get() and self.singleplaneentry.get() == "":
             self.logevent("Unable to run: Single plane mode active but no plane specified.")
@@ -1075,10 +1094,10 @@ class OutputTab(tk.Frame):
         if firstrun:
             ms.headers(self.logtext.get())
             firstrun = False
-        process_stopper = threading.Event()
+        process_stopper = Event()
         process_stopper.set()
-        work_thread = threading.Thread(target=self.start_analysis,
-                                       args=(process_stopper, finalregionfiles, finalspotfiles))
+        work_thread = Thread(target=self.start_analysis,
+                             args=(process_stopper, finalregionfiles, finalspotfiles))
         work_thread.setDaemon(True)
         work_thread.start()
 
@@ -1154,10 +1173,7 @@ if __name__ == "__main__":
     main()
 
 # TODO  - Further improve large object segmentation
-# TODO  - Only write headers once.
 # TODO  - Limit object size for centroids. Avoid background.
 # TODO  - S12 and S2 errors.
 # TODO  - Text limit on mac list boxes. Widen.
 # TODO  - Point checker
-# TODO  - Merge windows and mac file.
-# TODO  - Record object size/spot size
