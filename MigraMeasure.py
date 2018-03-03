@@ -63,13 +63,13 @@ def bit_depth_update(imgarray):
     if manualbitdepth:
         return scalemultiplier, absmin
     if maxvalue < 256:
-        depth = 0
+        depth = 0  # 8-bit
     elif 256 <= maxvalue < 1024:
-        depth = 1
+        depth = 1  # 10-bit
     elif 1024 <= maxvalue < 4096:
-        depth = 2
+        depth = 2  # 12-bit
     else:
-        depth = 3
+        depth = 3  # 16-bit
     if currentdepth < depth:
         name, scalemultiplier, maxrange, absmin = depthmap[depth]
         currentdepth = depth
@@ -190,6 +190,7 @@ class AboutWindow:
         self.line4 = tk.Label(self.aboutwindow, text="@DavidRStirling", font=("Arial", 10), justify=tk.CENTER)
         self.line4.pack(pady=(0, 15))
         self.aboutwindow.pack()
+
 
 # Enable and clear custom entry boxes
 def customtoggle(kwd, target):
@@ -453,7 +454,7 @@ class InputTab(tk.Frame):
         return "break"  # Prevent default bindings from activating and trying to scroll twice
 
     # Prompt to select an input directory.
-    def select_directory(self, *args):
+    def select_directory(self, *unusedargs):
         tryloaddir = tkfiledialog.askdirectory(title='Choose directory')
         if tryloaddir:
             self.loaddir.set(tryloaddir)
@@ -861,7 +862,7 @@ class ImageViewer(tk.Frame):
             self.overlayon = True
             self.toggleoverlay.state(['pressed'])
 
-    def config_canvas(self, *args):
+    def config_canvas(self, *unusedargs):
         self.ivcanvas.configure(scrollregion=self.ivcanvas.bbox("all"))  # Need to remove delta on OSX
 
     def mouse_wheel(self, event):
@@ -1013,29 +1014,32 @@ class OutputTab(tk.Frame):
         self.logbox.insert(tk.END, str(text))
         self.logbox.see(tk.END)
 
-    def save_file_set(self, *args):
+    def save_file_set(self, *unusedargs):
         global firstrun
+        logfile = None
         try:
             logfile = tkfiledialog.asksaveasfile(mode='w', defaultextension='.csv', initialfile='output.csv',
-                                             title='Save output file')
+                                                 title='Save output file')
         except AttributeError:
-            logevent("Save path appears to be invalid")
+            self.logevent("Save path appears to be invalid")
         except PermissionError:
-            logevent("Cannot write to save file, please make sure it isn't open in another program.")
+            self.logevent("Cannot write to save file, please make sure it isn't open in another program.")
         except OSError:
-            logevent("OSError, failed to write to save file.")
+            self.logevent("OSError, failed to write to save file.")
         if logfile:
             logfile.close()
             self.logtext.set(logfile.name)
             self.savestatus = True
             self.logevent("Save file set successfully.")
             firstrun = True
+            ms.indexnum = 0
+            ms.cellnum = 0
         else:
             self.savestatus = False
             self.logtext.set("Create a data log file")
             self.logevent("Save file selection unsuccessful.")
 
-    def preview_directory_set(self, *args):
+    def preview_directory_set(self, *unusedargs):
         setprevdir = tkfiledialog.askdirectory(title='Choose directory in which to save result images')
         if setprevdir:
             self.previewsavedir.set(setprevdir + '/')
@@ -1154,6 +1158,8 @@ class OutputTab(tk.Frame):
             if self.prevsavon.get() is False:
                 self.prevsaveselect.state(['disabled'])
                 self.prevdir.state(['disabled'])
+            if self.one_plane.get() is False:
+                self.singleplaneentry.state(['disabled'])
             self.currlog.bind("<Button-1>", self.save_file_set)
             self.prevdir.bind("<Button-1>", self.preview_directory_set)
 
@@ -1172,8 +1178,5 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO  - Further improve large object segmentation
-# TODO  - Limit object size for centroids. Avoid background.
-# TODO  - S12 and S2 errors.
 # TODO  - Text limit on mac list boxes. Widen.
 # TODO  - Point checker

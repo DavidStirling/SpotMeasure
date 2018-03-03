@@ -133,7 +133,7 @@ def get_line_points(center, spot, inputimage):
     if center[0] == spot[0]:  # No need to do maths if line is perfectly horizontal/vertical.
         linepoints = [[center[0], i] for i in range(maxhor)]
     elif center[1] == spot[1]:
-        linepoints = [[center[1], i] for i in range(maxver)]
+        linepoints = [[i, center[1]] for i in range(maxver)]
     else:  # Use algebra to find the equation of a line through the points.
         points = [center, spot]
         xcoords, ycoords = zip(*points)
@@ -199,36 +199,54 @@ def gennumbers(centpoint, perimpoint, tgtpoint):
 
 # Cycle through each cell in an image.
 def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier):
+    global indexnum, cellnum, currplane, imgfile
+    # Fetch segmentations for each image.
     regionseg, regionproperties, regionlabels = getseg(im, region_settings, 'region', False)
     spotseg, spotproperties, spotlabels = getseg(im2, spot_settings, 'spot', False)
+    # Isolate stats of interest from region properties.
     regioncentroids = [((int(item.centroid[0]), int(item.centroid[1])), item.area, item.bbox) for item in
                        regionproperties]
     spotcentroids = [((int(item.weighted_centroid[0]), int(item.weighted_centroid[1])), item.area, item.mean_intensity,
                       (item.area * item.mean_intensity)) for item in spotproperties]
-    global indexnum, cellnum
+    # Detect and remove spot segmentations which don't make sense.
+    maxarea = 500
+    spotcentroidsonly = [spot_data[1] for spot_data in spotcentroids]
+    numcentroids = len(spotcentroidsonly)
+    # Abandon analysis if there are too many spots above threshold size or any outrageously large ones.
+    if len([x for x in spotcentroidsonly if x >= maxarea]) >= 5 or len(
+            [x for x in spotcentroidsonly if x >= 10000]) >= 1:
+        logevent("Spot segmentation failed, skipping image")
+        return
+    # Otherwise remove them as noise and let the user know.
+    spotcentroids = [spot_data for spot_data in spotcentroids if spot_data[1] < maxarea]  # Remove overly large spots
+    if numcentroids > len(spotcentroids):
+        logevent("Plane " + str("%02d" % (currplane + 1)) + ": Removed " + str(
+            numcentroids - len(spotcentroids)) + " objects that were too large")
     spots = 0
     update_progress("plane", len(regionlabels))
-    for cell in regionlabels:
+    for cell in regionlabels:  # Iterate through each cell label, subset the image to just that cell.
         if stopper.wait():
             update_progress("cell", 0)
             roiregion, regioncent, spotcents, braw, rraw = makesubsets(cell, regionseg, regioncentroids, spotcentroids,
                                                                        im, im2)
-            perim = find_perim(roiregion)
+            perim = find_perim(roiregion)  # Get perimeter of the region.
             if len(spotcents) > 0:
                 cellnum += 1
+            # Analyse the spots, but when single spot mode is on only analyse if there's a single spot.
             if (len(spotcents) == 1 and one_per_cell is True) or one_per_cell is False:
                 for spot in spotcents:
                     linepoints = get_line_points(regioncent[0], spot[0], roiregion)
                     perimpoint = find_perim_intersect(perim, linepoints, spot[0])
                     dist, spotcenter, spotperim, pctmig = gennumbers(regioncent[0], perimpoint, spot[0])
-                    global imgfile
+                    # Send data for writing to the log.
                     datawriter(imgfile, (
-                    regioncent[1], spot[1], spot[2], spot[3], dist, spotcenter, spotperim, ('%0.2f' % pctmig)))
+                        regioncent[1], spot[1], spot[2], spot[3], dist, spotcenter, spotperim, ('%0.2f' % pctmig)))
                     spots += 1
                     indexnum += 1
-                    if wantpreview is True:
+                    if wantpreview is True:  # Generate result images if the user has asked for them.
                         betterpreview(braw, rraw, regioncent[0], perimpoint, spot[0], indexnum, multiplier)
-    logevent("Analysed " + str(spots) + " spots in " + str(len(regionlabels)) + " cells.")
+    logevent("Plane " + str("%02d" % (currplane + 1)) + ": Analysed " + str(spots) + " spots in " + str(
+        len(regionlabels)) + " cells.")
     return
 
 
@@ -277,8 +295,7 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_param
 
 def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, prevdir, one_per_cell,
                stopper):
-    global savedir, previewdir, indexnum, imgfile
-    indexnum = 0
+    global savedir, previewdir, imgfile
     previewdir = prevdir
     update_progress("starting", len(regioninput))
     for i in range(len(regioninput)):
@@ -332,20 +349,20 @@ def datawriter(exportpath, exportdata):
 # File List Generator
 def genfilelist(tgtdirectory, subdirectories, regionkwd, spotkwd, mode):
     regionfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                   files if f.lower().endswith(".tif") and regionkwd in
+                   files if f.lower().endswith(".tif") and not f.startswith(".") and regionkwd in
                    (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
                                          (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
     spotfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                 files if f.lower().endswith(".tif") and spotkwd in
+                 files if f.lower().endswith(".tif") and not f.startswith(".") and spotkwd in
                  (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
                                        (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
     regionshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for
                         root, dirs, files in os.walk(tgtdirectory) for f in files if
-                        f.lower().endswith(".tif") and regionkwd in (f if mode == 0 else (
+                        f.lower().endswith(".tif") and not f.startswith(".") and regionkwd in (f if mode == 0 else (
                             os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
                                 os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
     spotshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for root, dirs, files
-                      in os.walk(tgtdirectory) for f in files if f.lower().endswith(".tif") and spotkwd in (
+                      in os.walk(tgtdirectory) for f in files if f.lower().endswith(".tif") and not f.startswith(".") and spotkwd in (
                           f if mode == 0 else (
                               os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
                                   os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
