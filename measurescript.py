@@ -358,23 +358,19 @@ def datawriter(exportpath, exportdata):
 
 
 # File List Generator
-def genfilelist(tgtdirectory, subdirectories, regionkwd, spotkwd, mode):
-    regionfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                   files if f.lower().endswith(".tif") and not f.startswith(".") and regionkwd in
-                   (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
-                                         (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
-    spotfiles = [os.path.normpath(os.path.join(root, f)) for root, dirs, files in os.walk(tgtdirectory) for f in
-                 files if f.lower().endswith(".tif") and not f.startswith(".") and spotkwd in
-                 (f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else
-                                       (os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
-    regionshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for
-                        root, dirs, files in os.walk(tgtdirectory) for f in files if
-                        f.lower().endswith(".tif") and not f.startswith(".") and regionkwd in (f if mode == 0 else (
-                            os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                                os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
-    spotshortnames = [(".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:]) for root, dirs, files
-                      in os.walk(tgtdirectory) for f in files if f.lower().endswith(".tif") and not f.startswith(".") and spotkwd in (
-                          f if mode == 0 else (
-                              os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
-                                  os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
+def genfilelist(tgtdirectory, subdirectories, regnkwd, spotkwd, mode):
+    regnfilelist = [(os.path.normpath(os.path.join(root, f)),
+                     (".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:])) for root, dirs, files in
+                    os.walk(tgtdirectory) for f in files if
+                    f.lower().endswith((".tif", ".tiff")) and not f.startswith(".") and regnkwd in (
+                        f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
+                            os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
+    spotfilelist = [(os.path.normpath(os.path.join(root, f)),
+                     (".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:])) for root, dirs, files in
+                    os.walk(tgtdirectory) for f in files if
+                    f.lower().endswith((".tif", ".tiff")) and not f.startswith(".") and spotkwd in (
+                        f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
+                            os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
+    regionfiles, regionshortnames = [list(x) for x in zip(*regnfilelist)]
+    spotfiles, spotshortnames = [list(x) for x in zip(*spotfilelist)]
     return regionfiles, spotfiles, regionshortnames, spotshortnames
