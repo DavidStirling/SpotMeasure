@@ -887,6 +887,7 @@ class OutputTab(tk.Frame):
     def __init__(self, target):
         tk.Frame.__init__(self)
 
+        self.already_finished = False
         self.savestatus = False
         self.previewdirstatus = False
         self.outputcontrols = ttk.Frame(target)
@@ -1094,6 +1095,7 @@ class OutputTab(tk.Frame):
             widget.state(['disabled'])
         self.currlog.unbind("<Button 1>")
         self.prevdir.unbind("<Button 1>")
+        self.already_finished = False
         global process_stopper, firstrun
         if firstrun:
             ms.headers(self.logtext.get())
@@ -1108,16 +1110,13 @@ class OutputTab(tk.Frame):
     def abort_analysis(self):
         process_stopper.clear()
         self.logevent("Aborting run")
-        self.update_progress('finished', 0)
 
     def start_analysis(self, stopper, regioninput, spotinput):
-
         output_params = (self.prevsavon.get(), self.one_plane.get(), (self.desiredplane.get() - 1))
         region_settings = (app.regionconfig.segtype.get(), app.regionconfig.thresh.get(), app.regionconfig.smooth.get(),
                            app.regionconfig.minsize.get())
         spot_settings = (app.spotconfig.segtype.get(), app.spotconfig.thresh.get(), app.spotconfig.smooth.get(),
                          app.spotconfig.minsize.get())
-
         ms.cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params,
                       self.previewsavedir.get(), self.one_per_cell.get(), stopper)
 
@@ -1147,11 +1146,16 @@ class OutputTab(tk.Frame):
             self.filelimit = limit
             self.listprogress.config(maximum=self.filelimit)
             self.listprogressvar.set(0)
+        elif self.already_finished:
+            return
         else:  # Finished
-            if limit != 0:
-                self.listprogressvar.set(self.filelimit)
-                self.planeprogressvar.set(self.planelimit)
-                self.cellprogressvar.set(self.celllimit)
+            if limit != 0:  # Successful termination.
+                self.logevent("Analysis complete!")
+            elif limit == 0:  # Premature termination.
+                self.logevent("Analysis aborted")
+            self.listprogressvar.set(self.filelimit)
+            self.planeprogressvar.set(self.planelimit)
+            self.cellprogressvar.set(self.celllimit)
             self.startbutton.config(text="Run", command=self.sanity_check)
             for widget in self.widgetslist:
                 widget.state(['!disabled'])
@@ -1162,6 +1166,8 @@ class OutputTab(tk.Frame):
                 self.singleplaneentry.state(['disabled'])
             self.currlog.bind("<Button-1>", self.save_file_set)
             self.prevdir.bind("<Button-1>", self.preview_directory_set)
+            self.already_finished = True
+
 
 
 # UI Initialiser

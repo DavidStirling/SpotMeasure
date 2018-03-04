@@ -225,7 +225,7 @@ def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cel
     spots = 0
     update_progress("plane", len(regionlabels))
     for cell in regionlabels:  # Iterate through each cell label, subset the image to just that cell.
-        if stopper.wait():
+        if stopper.is_set():
             update_progress("cell", 0)
             roiregion, regioncent, spotcents, braw, rraw = makesubsets(cell, regionseg, regioncentroids, spotcentroids,
                                                                        im, im2)
@@ -245,6 +245,9 @@ def cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cel
                     indexnum += 1
                     if wantpreview is True:  # Generate result images if the user has asked for them.
                         betterpreview(braw, rraw, regioncent[0], perimpoint, spot[0], indexnum, multiplier)
+        else:
+            update_progress('finished', 0)
+            return
     logevent("Plane " + str("%02d" % (currplane + 1)) + ": Analysed " + str(spots) + " spots in " + str(
         len(regionlabels)) + " cells.")
     return
@@ -271,7 +274,7 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_param
         update_progress("file", numframes)
         if one_plane:  # Only analyse single plane, useful for z-stacks.
             if numframes >= one_plane_id:
-                if stopper.wait():
+                if stopper.is_set():
                     img.seek(one_plane_id)
                     img2.seek(one_plane_id)
                     im = np.array(img)
@@ -279,11 +282,14 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_param
                     multiplier, absolute_min = bit_depth_update(im)
                     currplane = one_plane_id
                     cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier)
+                else:
+                    update_progress('finished', 0)
+                    return
             else:
                 logevent("Image does not have " + str(one_plane_id + 1) + " planes, skipping.")
         else:  # Analyse all planes, useful for field stacks.
             for i in range(numframes):
-                if stopper.wait():
+                if stopper.is_set():
                     img.seek(i)
                     img2.seek(i)
                     im = np.array(img)
@@ -291,6 +297,9 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_param
                     multiplier, absolute_min = bit_depth_update(im)
                     currplane = i
                     cyclecells(im, im2, region_settings, spot_settings, wantpreview, one_per_cell, stopper, multiplier)
+                else:
+                    update_progress('finished', 0)
+                    return
 
 
 def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, prevdir, one_per_cell,
@@ -301,11 +310,13 @@ def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_pa
     for i in range(len(regioninput)):
         logevent(f"Analysing {regioninput[i]}")
         imgfile = regioninput[i]
-        if stopper.wait():
+        if stopper.is_set():
             cycleplanes(regioninput[i], spotinput[i], region_settings, spot_settings, output_params, one_per_cell,
                         stopper)
+        else:
+            update_progress('finished', 0)
+            return
     update_progress("finished", 1)
-    logevent("Analysis complete!")
 
 
 # Writes headers in output file
