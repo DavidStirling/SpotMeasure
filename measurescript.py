@@ -359,6 +359,7 @@ def datawriter(exportpath, exportdata):
 
 # File List Generator
 def genfilelist(tgtdirectory, subdirectories, regnkwd, spotkwd, mode):
+    regionfiles, regionshortnames, spotfiles, spotshortnames = [],[],[],[]
     regnfilelist = [(os.path.normpath(os.path.join(root, f)),
                      (".." + (os.path.join((os.path.relpath(root, tgtdirectory)), f))[-50:])) for root, dirs, files in
                     os.walk(tgtdirectory) for f in files if
@@ -371,6 +372,8 @@ def genfilelist(tgtdirectory, subdirectories, regnkwd, spotkwd, mode):
                     f.lower().endswith((".tif", ".tiff")) and not f.startswith(".") and spotkwd in (
                         f if mode == 0 else (os.path.join((os.path.relpath(root, tgtdirectory)), f) if mode == 1 else (
                             os.path.join(root, f)))) and (root == tgtdirectory or subdirectories)]
-    regionfiles, regionshortnames = [list(x) for x in zip(*regnfilelist)]
-    spotfiles, spotshortnames = [list(x) for x in zip(*spotfilelist)]
+    if len(regnfilelist) > 0:
+        regionfiles, regionshortnames = [list(x) for x in zip(*regnfilelist)]
+    if len(spotfilelist) > 0:
+        spotfiles, spotshortnames = [list(x) for x in zip(*spotfilelist)]
     return regionfiles, spotfiles, regionshortnames, spotshortnames

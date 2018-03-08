@@ -96,13 +96,12 @@ class CoreWindow:
             self.master.tk_setPalette(background='#E7E7E7', selectForeground='#ffffff', selectBackground='#0000ff')
         self.master.wm_title("MigraMeasure")
         self.master.iconbitmap(resource_path('resources/mmicon'))
-        self.master.resizable(width=False, height=True)
         self.height = self.master.winfo_screenheight()
         if os.name == 'nt':
             self.width = 740
             self.desiredheight = 825
         else:
-            self.width = 775
+            self.width = 780
             self.desiredheight = 880
         if self.height < self.desiredheight:
             self.master.geometry('%sx%s' % (self.width, self.height - 50))
@@ -161,7 +160,8 @@ class CoreWindow:
         self.about_window = tk.Toplevel(self.master)
         self.app = AboutWindow(self.about_window)
         self.about_window.title("About")
-        self.about_window.wm_attributes('-toolwindow', 1)
+        if os.name == 'nt':
+            self.about_window.wm_attributes('-toolwindow', 1)
         self.about_window.focus_set()
         self.about_window.grab_set()
         self.about_window.update_idletasks()
@@ -297,12 +297,18 @@ class InputTab(tk.Frame):
         self.gen_filelist.pack(fill=tk.X, padx=20, pady=10)
 
         # List Box Frame
+        if os.name == 'nt':
+            self.listwidth = 52
+        else:
+            self.listwidth = 35
         self.file_list_box = ttk.Frame(target, border=2, relief=tk.GROOVE)
         self.file_list_box.pack(expand=True, fill=tk.Y)
         self.scrollbar = ttk.Scrollbar(self.file_list_box, orient=tk.VERTICAL)
-        self.regionbox = tk.Listbox(self.file_list_box, width=52, yscrollcommand=self.scrollbar.set, activestyle="none")
+        self.regionbox = tk.Listbox(self.file_list_box, width=self.listwidth, yscrollcommand=self.scrollbar.set,
+                                    activestyle="none")
         self.regionbox.grid(column=1, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
-        self.spotbox = tk.Listbox(self.file_list_box, width=52, yscrollcommand=self.scrollbar.set, activestyle="none")
+        self.spotbox = tk.Listbox(self.file_list_box, width=self.listwidth, yscrollcommand=self.scrollbar.set,
+                                  activestyle="none")
         self.spotbox.grid(column=4, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
         self.scrollbar.config(command=self.scroll_listboxes)
         self.scrollbar.grid(column=5, row=1, rowspan=10, sticky=tk.W + tk.E + tk.N + tk.S)
@@ -548,6 +554,8 @@ class ImageViewer(tk.Frame):
         self.previewframe = ttk.Frame(self.ivframe, width=696, height=520)
         self.previewpane = tk.Label(self.previewframe)
         self.previewpane.pack()
+        self.previewpane.bind("<Motion>", self.mouse_hover)
+
         if os.name == "nt":
             self.previewpane.bind("<MouseWheel>", self.mouse_wheel)
 
@@ -568,14 +576,15 @@ class ImageViewer(tk.Frame):
         self.changepreviewbutton = ttk.Button(self.imgcontrols, text="Select File", )
         self.changepreviewbutton.grid(column=5, row=2, padx=3, ipadx=10, ipady=2)
 
-        self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous", state=tk.DISABLED)
+        self.prevplanebutton = ttk.Button(self.imgcontrols, text="Previous")
         self.prevphoto = tk.PhotoImage(file=resource_path("resources/Left"))
         self.prevplanebutton.config(image=self.prevphoto)
         self.prevplanebutton.grid(column=6, row=2, padx=1, pady=2)
         self.planenumber = ttk.Label(self.imgcontrols, text=(
                 "Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
         self.planenumber.grid(column=7, row=2)
-        self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next", state=tk.DISABLED)
+        self.nextplanebutton = ttk.Button(self.imgcontrols, text="Next")
+
         self.nextphoto = tk.PhotoImage(file=resource_path("resources/Right"))
         self.nextplanebutton.config(image=self.nextphoto)
         self.nextplanebutton.grid(column=8, row=2, padx=1, pady=2)
@@ -583,8 +592,11 @@ class ImageViewer(tk.Frame):
         self.changepreviewbutton.config(command=lambda: self.update_file("new"))
         self.prevpreviewbutton.config(command=lambda: self.update_file("rev"))
         self.nextpreviewbutton.config(command=lambda: self.update_file("fwd"))
-        self.prevplanebutton.config(command=lambda: self.update_plane("rev"))
-        self.nextplanebutton.config(command=lambda: self.update_plane("fwd"))
+        if os.name == 'nt':
+            self.prevplanebutton.config(state=tk.DISABLED)
+            self.nextplanebutton.config(state=tk.DISABLED)
+            self.prevplanebutton.config(command=lambda: self.update_plane("rev"))
+            self.nextplanebutton.config(command=lambda: self.update_plane("fwd"))
 
         global depthname
         self.bitdepthlabel = ttk.LabelFrame(self.imgcontrols, text="Display Mode", relief='flat')
@@ -618,15 +630,20 @@ class ImageViewer(tk.Frame):
         self.regenprev.grid(column=5, row=1, padx=5, rowspan=2, sticky=tk.NSEW)
         self.toggleoverlay = ttk.Button(self.segcontrols, text="Show/Hide Overlay")
         self.toggleoverlay.grid(column=6, row=1, padx=5, rowspan=2, sticky=tk.NSEW)
-        # self.overlaysave = ttk.Button(self.segcontrols, text="Save Preview")
-        # self.overlaysave.grid(column=6, row=1, rowspan=2, padx=5, sticky=tk.NSEW)
+
+        self.currpixel = tk.IntVar()
+        self.currpixel.set(0)
+        self.pixelframe = ttk.LabelFrame(self.segcontrols, text="Intensity")
+        self.pixelframe.grid(column=7, row=1, rowspan=2, padx=5, sticky=tk.NSEW)
+        self.currentpixel = ttk.Label(self.pixelframe, textvariable=self.currpixel)
+        self.currentpixel.pack()
 
         # Preview Progress
         self.progress_var = tk.IntVar()
         self.progress_var.set(0)
         self.previewprogress = ttk.Progressbar(self.segcontrols, mode='determinate', variable=self.progress_var,
                                                length=100, orient=tk.HORIZONTAL)
-        self.previewprogress.grid(column=7, row=1, rowspan=2, pady=5, sticky=tk.E, padx=20)
+        self.previewprogress.grid(column=8, row=1, rowspan=2, pady=5, sticky=tk.E, padx=20)
 
         # Manual Segmentation Sliders
         self.sliderframe = ttk.Frame(self.segcontrols)
@@ -700,8 +717,12 @@ class ImageViewer(tk.Frame):
             self.previewpane.config(image='', text="No Image")
             self.planenumber.config(text=("Plane " + str(00) + " of " + str(00)))
             self.previewtitle.config(text=self.previewfiletitle)
-            self.prevplanebutton.config(state=tk.DISABLED)
-            self.nextplanebutton.config(state=tk.DISABLED)
+            if os.name == 'nt':
+                self.prevplanebutton.config(state=tk.DISABLED)
+                self.nextplanebutton.config(state=tk.DISABLED)
+            else:
+                self.prevplanebutton.config(command=None)
+                self.nextplanebutton.config(command=None)
             return
         self.planeid = 1
         if self.previewfile != "<No File Found>":
@@ -739,6 +760,7 @@ class ImageViewer(tk.Frame):
         self.temppreview = Image.fromarray(self.im2)
         self.preview = ImageTk.PhotoImage(self.temppreview)
         self.previewpane.config(image=self.preview)
+        self.currpixel.set(0)
 
     def update_plane(self, direction):
         if self.image:
@@ -756,18 +778,32 @@ class ImageViewer(tk.Frame):
             self.regen_preview()
         elif self.previewfile == "<No File Found>":
             self.planenumber.config(text="Plane 00 of 00")
-            self.prevplanebutton.config(state=tk.DISABLED)
-            self.nextplanebutton.config(state=tk.DISABLED)
+            if os.name == 'nt':
+                self.prevplanebutton.config(state=tk.DISABLED)
+                self.nextplanebutton.config(state=tk.DISABLED)
+            else:
+                self.prevplanebutton.config(command=None)
+                self.nextplanebutton.config(command=None)
             self.overlaymade = False
             self.progress_var.set(0)
             return
         self.planenumber.config(text=("Plane " + str("%02d" % self.planeid) + " of " + str("%02d" % self.numplanes)))
-        self.prevplanebutton.config(state=tk.DISABLED)
-        self.nextplanebutton.config(state=tk.DISABLED)
-        if self.planeid > 1:
-            self.prevplanebutton.config(state=tk.NORMAL)
-        if self.planeid < self.numplanes:
-            self.nextplanebutton.config(state=tk.NORMAL)
+        if os.name == 'nt':
+            self.prevplanebutton.config(state=tk.DISABLED)
+            self.nextplanebutton.config(state=tk.DISABLED)
+            if self.planeid > 1:
+                self.prevplanebutton.config(state=tk.NORMAL)
+            if self.planeid < self.numplanes:
+                self.nextplanebutton.config(state=tk.NORMAL)
+        else:
+            self.prevplanebutton.config(command=None)
+            self.nextplanebutton.config(command=None)
+            print(self.planeid)
+            if self.planeid > 1:
+                self.prevplanebutton.config(command=lambda: self.update_plane("rev"))
+                print("command added")
+            if self.planeid < self.numplanes:
+                self.nextplanebutton.config(command=lambda: self.update_plane("fwd"))
         self.overlaymade = False
         if self.overlayon is True:
             self.initiate_overlay()
@@ -881,6 +917,14 @@ class ImageViewer(tk.Frame):
         self.threshold.state([stateset])
         self.setthr.state([stateset])
 
+    def mouse_hover(self, event):
+        if self.previewfile not in ("<No File Found>", "<Invalid File Format>", None):
+            ymax, xmax = self.im.shape
+            if event.y * 2 < ymax and event.x * 2 < xmax:
+                pixel = self.im[event.y * 2][event.x * 2]
+                self.currpixel.set(pixel)
+        else:
+            self.currpixel.set(0)
 
 class OutputTab(tk.Frame):
     # A tab for setting up the data output and viewing the log
@@ -1169,7 +1213,6 @@ class OutputTab(tk.Frame):
             self.already_finished = True
 
 
-
 # UI Initialiser
 def main():
     global app
@@ -1185,4 +1228,3 @@ if __name__ == "__main__":
     main()
 
 # TODO  - Text limit on mac list boxes. Widen.
-# TODO  - Point checker
