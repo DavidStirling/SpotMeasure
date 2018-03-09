@@ -1,4 +1,4 @@
-# MigraMeasure - A tool for quantifying how far into a region fluorescent objects have migrated.
+# SpotMeasure - A tool for quantifying how far into a region fluorescent objects are located.
 # Copyright(C) 2018 David Stirling
 
 """This program is free software: you can redistribute it and/or modify
@@ -94,7 +94,7 @@ class CoreWindow:
         depthname.set(currentdepthname)
         if os.name != 'nt':
             self.master.tk_setPalette(background='#E7E7E7', selectForeground='#ffffff', selectBackground='#0000ff')
-        self.master.wm_title("MigraMeasure")
+        self.master.wm_title("SpotMeasure")
         self.master.iconbitmap(resource_path('resources/mmicon'))
         self.height = self.master.winfo_screenheight()
         if os.name == 'nt':
@@ -110,7 +110,7 @@ class CoreWindow:
 
         # Top Bar
         self.header = tk.Frame()
-        self.title = tk.Label(self.header, text="MigraMeasure", font=("Arial", 25), justify=tk.CENTER)
+        self.title = tk.Label(self.header, text="SpotMeasure", font=("Arial", 25), justify=tk.CENTER)
         self.title.grid(column=2, columnspan=1, row=1, sticky=tk.E + tk.W)
 
         self.aboutbutton = ttk.Button(self.header, text="About", command=self.about_window)
@@ -181,7 +181,7 @@ class AboutWindow:
         self.logoimg = ImageTk.PhotoImage(self.logo)
         self.logoimage = tk.Label(self.aboutwindow, image=self.logoimg)
         self.logoimage.pack(pady=(15, 0))
-        self.heading = tk.Label(self.aboutwindow, text="MigraMeasure", font=("Arial", 18), justify=tk.CENTER)
+        self.heading = tk.Label(self.aboutwindow, text="SpotMeasure", font=("Arial", 18), justify=tk.CENTER)
         self.heading.pack()
         self.line2 = tk.Label(self.aboutwindow, text="Version " + version, font=("Consolas", 10), justify=tk.CENTER)
         self.line2.pack(pady=(0, 5))
@@ -612,13 +612,13 @@ class ImageViewer(tk.Frame):
         self.segcontrols.pack()
         self.segcontrols.grid_columnconfigure(10, weight=1)
         self.segcontrols.grid_columnconfigure(1, weight=1)
-        self.seglabel = ttk.Label(self.segcontrols, text="Thresholding Mode:")
+        self.seglabel = ttk.Label(self.segcontrols, text="Automatic Thresholding:")
         self.seglabel.grid(column=2, row=1, columnspan=3)
 
-        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Strict)", variable=self.segtype, value="High",
+        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Method 1", variable=self.segtype, value="High",
                                        command=self.threshold_mode)
         self.autoseg.grid(column=2, row=2)
-        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Auto (Lax)", variable=self.segtype, value="Low",
+        self.autoseg = ttk.Radiobutton(self.segcontrols, text="Method 2", variable=self.segtype, value="Low",
                                        command=self.threshold_mode)
         self.autoseg.grid(column=3, row=2)
         self.manualseg = ttk.Radiobutton(self.segcontrols, text="Manual", variable=self.segtype, value="Manual",
