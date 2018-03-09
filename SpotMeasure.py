@@ -139,7 +139,7 @@ class CoreWindow:
         self.logconfig = OutputTab(self.tab4)
         self.tabControl.bind('<Button-1>', self.on_click)
 
-        #  Hold empty
+        # Reserve variables
         self.about_window = None
         self.app = None
 
@@ -490,7 +490,7 @@ class InputTab(tk.Frame):
         self.regionbox.delete(0, tk.END)
         self.spotbox.delete(0, tk.END)
         self.file_lists_empty = False
-        # FILL MISSING FILES
+        # Fill missing files
         if len(regionshortnames) < len(spotshortnames):
             regionfiles += ["<No File Found>"] * (len(spotfiles) - len(regionfiles))
             regionshortnames += ["<No File Found>"] * (len(spotshortnames) - len(regionshortnames))
@@ -687,6 +687,7 @@ class ImageViewer(tk.Frame):
         self.threshold_mode()
         self.regenprev.config(command=self.initiate_overlay)
         self.toggleoverlay.config(command=self.toggle_overlay)
+
         # Setup variables for overlay control
         self.overlayon = False
         self.overlaymade = False
@@ -694,10 +695,12 @@ class ImageViewer(tk.Frame):
         self.overlaypreview = None
         self.runningstatus = False
 
+        # Bind mousewheel to previewer on Windows only, mac two-finger scrolling causes a crash.
         if os.name == "nt":
             for child in self.ivframe.children.values():
                 child.bind("<MouseWheel>", self.mouse_wheel)
 
+    # Load preview image upon opening a tab for the first time.
     def activate_tab(self, imagepool, imagenamepool):
         if self.firstview is False:
             return
@@ -731,6 +734,7 @@ class ImageViewer(tk.Frame):
         self.update_file("none")
         self.firstview = False
 
+    # Regenerate and update the preview image.
     def regen_preview(self):
         validmodes = ['I;8', 'L', 'I;16']
         if len(self.previewfiletitle) > 150:
@@ -762,6 +766,7 @@ class ImageViewer(tk.Frame):
         self.previewpane.config(image=self.preview)
         self.currpixel.set(0)
 
+    #  Update the plane changer when the image is changed.
     def update_plane(self, direction):
         if self.image:
             self.numplanes = self.image.n_frames
@@ -771,7 +776,6 @@ class ImageViewer(tk.Frame):
             self.planeid += 1
             self.image.seek(self.planeid - 1)
             self.regen_preview()
-
         elif direction == "rev":
             self.planeid -= 1
             self.image.seek(self.planeid - 1)
@@ -810,6 +814,7 @@ class ImageViewer(tk.Frame):
         else:
             self.progress_var.set(0)
 
+    # Change the currently loaded file.
     def update_file(self, changetype):
         self.nextpreviewbutton.config(state=tk.DISABLED)
         self.prevpreviewbutton.config(state=tk.DISABLED)
@@ -832,6 +837,7 @@ class ImageViewer(tk.Frame):
         self.planeid = 1
         self.update_plane("none")
 
+    # Open a file
     def open_file(self, isnew):
         if isnew:
             self.previewfiletitle = self.previewfile
@@ -845,6 +851,24 @@ class ImageViewer(tk.Frame):
                 self.previewfile = "<Invalid File Format>"
         self.regen_preview()
 
+    # Setup a thread to generate a segmentation preview image.
+    def initiate_overlay(self):
+        global overlay_thread
+        if 'overlay_thread' in globals() and overlay_thread.isAlive():  # Disable overlays if img changing too fast.
+            self.previewpane.config(image=self.preview)
+            self.overlayon = False
+            self.overlaymade = False
+            self.toggleoverlay.state(['!pressed'])
+            self.previewprogress.stop()
+            self.progress_var.set(0)
+            return
+        overlay_thread = Thread(target=self.segmentation_preview)
+        overlay_thread.setDaemon(True)
+        overlay_thread.start()
+        self.overlayon = True
+        self.toggleoverlay.state(['pressed'])
+
+    # Call for a preview to be generated, run the progress bar while the preview thread operates.
     def segmentation_preview(self):
         self.progress_var.set(0)
         self.previewprogress.start(10)
@@ -870,22 +894,7 @@ class ImageViewer(tk.Frame):
         self.previewprogress.stop()
         self.progress_var.set(100)
 
-    def initiate_overlay(self):
-        global overlay_thread
-        if 'overlay_thread' in globals() and overlay_thread.isAlive():  # Disable overlays if img changing too fast.
-            self.previewpane.config(image=self.preview)
-            self.overlayon = False
-            self.overlaymade = False
-            self.toggleoverlay.state(['!pressed'])
-            self.previewprogress.stop()
-            self.progress_var.set(0)
-            return
-        overlay_thread = Thread(target=self.segmentation_preview)
-        overlay_thread.setDaemon(True)
-        overlay_thread.start()
-        self.overlayon = True
-        self.toggleoverlay.state(['pressed'])
-
+    # Toggle display of a segmentation overlay.
     def toggle_overlay(self):
         if self.overlayon is True:
             self.previewpane.config(image=self.preview)
@@ -898,14 +907,17 @@ class ImageViewer(tk.Frame):
             self.overlayon = True
             self.toggleoverlay.state(['pressed'])
 
+    # Tie the previewing canvas to the scrollbar.
     def config_canvas(self, *unusedargs):
         self.ivcanvas.configure(scrollregion=self.ivcanvas.bbox("all"))  # Need to remove delta on OSX
 
+    # Handle mouse wheel scrolling.
     def mouse_wheel(self, event):
         if os.name == 'nt':
             event.delta = int(event.delta / 120)
         self.ivcanvas.yview_scroll(-event.delta, "units")
 
+    # Toggle automatic thresholding mode.
     def threshold_mode(self):
         if self.segtype.get() == "Manual":
             stateset = '!disabled'
@@ -917,6 +929,7 @@ class ImageViewer(tk.Frame):
         self.threshold.state([stateset])
         self.setthr.state([stateset])
 
+    # Get pixel intensity under the mouse pointer.
     def mouse_hover(self, event):
         if self.previewfile not in ("<No File Found>", "<Invalid File Format>", None):
             ymax, xmax = self.im.shape
@@ -930,14 +943,13 @@ class OutputTab(tk.Frame):
     # A tab for setting up the data output and viewing the log
     def __init__(self, target):
         tk.Frame.__init__(self)
-
         self.already_finished = False
         self.savestatus = False
         self.previewdirstatus = False
         self.outputcontrols = ttk.Frame(target)
         self.outputcontrols.pack(pady=10)
-        # Set Log File
 
+        # Set Log File
         self.logtext = tk.StringVar()
         self.logtext.set("Create a data log file")
         self.logselect = ttk.Button(self.outputcontrols, text="Select Output File", command=self.save_file_set)
@@ -946,7 +958,6 @@ class OutputTab(tk.Frame):
         self.currlog.grid(column=1, columnspan=10, ipadx=150, padx=5, pady=5, row=1, sticky=tk.E + tk.W)
 
         # Set Preview Save Folder
-
         self.previewsavedir = tk.StringVar()
         self.previewsavedir.set("Select a directory to save result images to")
         self.prevsaveselect = ttk.Button(self.outputcontrols, text="Select Save Directory",
@@ -960,32 +971,33 @@ class OutputTab(tk.Frame):
                                              onvalue=True, offvalue=False, command=self.toggle_preview_status)
         self.prevsavecheck.grid(column=7, row=3, columnspan=4, sticky=tk.E)
 
+        # Analysis options
         self.one_per_cell = tk.BooleanVar()
         self.one_per_cell.set(False)
+        self.one_plane = tk.BooleanVar()
+        self.one_plane.set(False)
+        self.desiredplane = tk.IntVar()
+        self.desiredplane.set(1)
         self.singlespotcheck = ttk.Checkbutton(self.outputcontrols, text="Restrict analysis to cells with 1 spot",
                                                variable=self.one_per_cell, onvalue=True, offvalue=False)
         self.singlespotcheck.grid(column=1, row=3, columnspan=4, sticky=tk.W)
 
-        self.one_plane = tk.BooleanVar()
-        self.one_plane.set(False)
         self.singleplanecheck = ttk.Checkbutton(self.outputcontrols, text="Only analyse plane:",
                                                 variable=self.one_plane, onvalue=True, offvalue=False)
         self.singleplanecheck.grid(column=1, row=4, columnspan=1, sticky=tk.W)
-
-        self.desiredplane = tk.IntVar()
-        self.desiredplane.set(1)
         self.vcmd = (self.register(self.validate), '%d', '%i', '%P', '%s', '%S', '%v', '%V', '%W')
         self.singleplaneentry = ttk.Entry(self.outputcontrols, validate='key', validatecommand=self.vcmd, width=3)
         self.singleplaneentry.grid(column=2, row=4, columnspan=1, sticky=tk.W)
         self.singleplanecheck.config(command=self.toggle_single_plane)
         self.singleplaneentry.state(['disabled'])
-
         self.outputcontrols.grid_columnconfigure(3, weight=1)
+
+        # Run button
         self.startbutton = ttk.Button(target, text="Run!", command=self.sanity_check)
         self.startbutton.pack(expand=False, pady=10)
 
+        # Progress bars
         self.controlframe = ttk.Frame(target)
-
         self.filelisttext = ttk.Label(self.controlframe, text="File Progress")
         self.filelisttext.pack()
         self.listprogressvar = tk.IntVar()
@@ -993,7 +1005,6 @@ class OutputTab(tk.Frame):
         self.listprogress = ttk.Progressbar(self.controlframe, mode='determinate', length=400, orient=tk.HORIZONTAL,
                                             variable=self.listprogressvar)
         self.listprogress.pack(expand=False, pady=(0, 10), padx=20)
-
         self.planelisttext = ttk.Label(self.controlframe, text="Stack Progress")
         self.planelisttext.pack()
         self.planeprogressvar = tk.IntVar()
@@ -1001,7 +1012,6 @@ class OutputTab(tk.Frame):
         self.planeprogress = ttk.Progressbar(self.controlframe, mode='determinate', length=400, orient=tk.HORIZONTAL,
                                              variable=self.planeprogressvar)
         self.planeprogress.pack(expand=False, pady=(0, 10), padx=20)
-
         self.celllisttext = ttk.Label(self.controlframe, text="Image Progress")
         self.celllisttext.pack()
         self.cellprogressvar = tk.IntVar()
@@ -1009,9 +1019,9 @@ class OutputTab(tk.Frame):
         self.cellprogress = ttk.Progressbar(self.controlframe, mode='determinate', length=400, orient=tk.HORIZONTAL,
                                             variable=self.cellprogressvar)
         self.cellprogress.pack(expand=False, pady=(0, 10), padx=20)
-
         self.controlframe.pack()
 
+        # Log Box
         self.logframe = ttk.Frame(target)
         self.logscrollbar = ttk.Scrollbar(self.logframe)
         self.logbox = tk.Listbox(self.logframe, yscrollcommand=self.logscrollbar.set, activestyle="none")
@@ -1029,6 +1039,7 @@ class OutputTab(tk.Frame):
         self.planelimit = 0
         self.celllimit = 0
 
+    # Restrict text entry in plane selector to number only.
     def validate(self, action, index, value_if_allowed, prior_value, input, validation_type, trigger_type, widget_name):
         if input in '0123456789':
             if value_if_allowed == "":
@@ -1045,6 +1056,7 @@ class OutputTab(tk.Frame):
         else:
             return False
 
+    # Toggle single plane mode. Enable entry box to choose plane.
     def toggle_single_plane(self):
         if self.one_plane.get():
             self.singleplaneentry.state(['!disabled'])
@@ -1059,6 +1071,7 @@ class OutputTab(tk.Frame):
         self.logbox.insert(tk.END, str(text))
         self.logbox.see(tk.END)
 
+    # Set save file.
     def save_file_set(self, *unusedargs):
         global firstrun
         logfile = None
@@ -1084,6 +1097,7 @@ class OutputTab(tk.Frame):
             self.logtext.set("Create a data log file")
             self.logevent("Save file selection unsuccessful.")
 
+    # Set result image directory.
     def preview_directory_set(self, *unusedargs):
         setprevdir = tkfiledialog.askdirectory(title='Choose directory in which to save result images')
         if setprevdir:
@@ -1094,6 +1108,7 @@ class OutputTab(tk.Frame):
             self.previewdirstatus = False
             self.logevent("Result image directory selection unsuccessful.")
 
+    # Enable/disable result image directory selection.
     def toggle_preview_status(self):
         if self.prevsavon.get() is True:
             self.prevsaveselect.state(['!disabled'])
@@ -1103,6 +1118,8 @@ class OutputTab(tk.Frame):
             self.prevdir.state(['disabled'])
         return
 
+    # Check ALL parameters are set before trying to initiate a run.
+    # If all is ok, write headers, lock interface and create work thread.
     def sanity_check(self):
         global regionfiles, spotfiles, regionshortnames, spotshortnames
         if len(regionfiles) < 1 or len(spotfiles) < 1:
@@ -1151,10 +1168,12 @@ class OutputTab(tk.Frame):
         work_thread.setDaemon(True)
         work_thread.start()
 
+    # Flag to abort an analysis.
     def abort_analysis(self):
         process_stopper.clear()
         self.logevent("Aborting run")
 
+    # Package thresholding settings and start analysis.
     def start_analysis(self, stopper, regioninput, spotinput):
         output_params = (self.prevsavon.get(), self.one_plane.get(), (self.desiredplane.get() - 1))
         region_settings = (app.regionconfig.segtype.get(), app.regionconfig.thresh.get(), app.regionconfig.smooth.get(),
@@ -1164,6 +1183,7 @@ class OutputTab(tk.Frame):
         ms.cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params,
                       self.previewsavedir.get(), self.one_per_cell.get(), stopper)
 
+    # Update progress bars.
     def update_progress(self, updatetype, limit):
         if updatetype == "file":
             self.planelimit = limit
@@ -1228,3 +1248,4 @@ if __name__ == "__main__":
     main()
 
 # TODO  - Text limit on mac list boxes. Widen.
+# TODO  - Better icon

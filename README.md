@@ -4,12 +4,12 @@ SpotMeasure is an image analysis program designed to measure how far into a regi
 
 Sample uses: Analysis of retroviral integration sites. Evaluation of gene localisation within the nucleus.
 
-[Img]
+![Method Diagram](https://i.imgur.com/mChFQDU.png "Method Diagram")
+
 
 ## Download
 
-[Available for Download Here](https://github.com/DavidStirling/SpotMeasure/releases/)
-[Link to releases page and latest release]
+[Available for Download Soon](https://github.com/DavidStirling/SpotMeasure/releases/)
 
 ## Referencing
 
@@ -28,6 +28,9 @@ SpotMeasure makes use of a tabbed interface which can be followed to setup and c
 
 ## Input
 
+
+![Input Tab](https://i.imgur.com/bvnrz9q.png "Input Tab")
+
 This program reads greyscale **.tif** files which can be exported from most microscopes. The current software version is capable of handling image stacks (a single file containing multiple fields or z-planes).
 
 To setup an analysis you need to generate two lists of files which will be displayed on this screen. "Region" images should contain the regions of interest (e.g. nuclei) while "Spot" images feature the objects within each region which you'd like to evaluate. File lists are populated as follows:
@@ -41,13 +44,13 @@ Additional options:
 
 - Specify whether to search for images in subdirectories - folders within the chosen directory.
 - Manually specify the bit depth of the files you're loading. This will normally be automatic.
-- Choose whether to search for a keyword within just the file name, the name & subdirectory within the chosen folder or the entire path to the file.
+- Choose whether to search for a keyword within just the file name, the name + subdirectory within the chosen folder or the entire path to the file.
 
 Once file lists are populated, move on to the "Region Detection" and "Spot Detection" tabs.
 
 ## Region/Spot Detection
 
-[Img]
+![Detection Settings Tab](https://i.imgur.com/0zH6LgP.png "Detection Settings Tab")
 
 The next two tabs allow you to configure detection of regions and spots respectively.
 
@@ -97,7 +100,7 @@ Once you're comfortable with the detection settings, proceed to the "Output" tab
 
 ## Output
 
-[Img]
+![Output Tab](https://i.imgur.com/Arwk3jx.png "Output Tab")
 
 #### Output Settings
 
@@ -105,7 +108,7 @@ In this dialog you can create a **log file** in which data will be exported. Thi
 
 It is also possible to specify a directory where **result images** will be saved to. Result images are smaller image overlays displaying the detected spot (green), measurement line (red) and points used for measurement (white), with a single file for each cell named with the identifying number of each spot in the log file (e.g. Image 2 will be the second spot analysed). This feature can be disabled by unchecking "**Save Result Images**".
 
-[img]
+![Result Image](https://i.imgur.com/CeFCcyl.png "result Image")
 
 There are also additional options on this tab. **"Restrict analysis to cells with 1 spot"** will prevent the program from analysing any cell which has more than 1 object detected within it. It is also possible to **restrict analysis to a single plane** which can be specified by typing in the relevant text box (useful for working with z stacks).
 

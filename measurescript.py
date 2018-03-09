@@ -302,6 +302,7 @@ def cycleplanes(regionimg, spotimg, region_settings, spot_settings, output_param
                     return
 
 
+# Cycle through files
 def cyclefiles(regioninput, spotinput, region_settings, spot_settings, output_params, prevdir, one_per_cell,
                stopper):
     global savedir, previewdir, imgfile
